@@ -5,11 +5,11 @@ import pyautogui
 import sys
 import subprocess
 from pathlib import Path
-import ctypes
-import os
+import win32gui
 
 
-from mumu_tool.adb_core import swipe_all_devices, check_shells_created
+from mumu_tool.adb_core import swipe_all_devices, check_shells_created, tap
+from mumu_tool.window_map import windows
 
 
 def auto_click():
@@ -122,14 +122,6 @@ def auto_luom():
             keyboard.remove_hotkey(key)
 
 
-# def run_setup():
-#     script_path = Path(__file__).parent / "setup.ps1"
-#     if ctypes.windll.shell32.IsUserAnAdmin():
-#         os.system(f'powershell -ExecutionPolicy Bypass -File "{script_path}"')
-#     else:
-#         ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell", f'-ExecutionPolicy Bypass -File "{script_path}"', None, 1)
-
-
 def sync_mouse_keyboard(role):
     CREATE_NEW_CONSOLE = 0x00000010
     file_path = Path(__file__).parent / "sync.py"
@@ -181,3 +173,35 @@ def sync_mouse_keyboard(role):
             subprocess.Popen([sys.executable, file_path, "--role", role, "--ip", data], creationflags=CREATE_NEW_CONSOLE)
 
             input("\nNhấn Enter để tiếp tục...")
+
+
+def test_click():
+    check_shells_created()
+    file_path = Path(__file__).parent / "click.txt"
+
+    def tap_drop():
+        hwnd = win32gui.GetForegroundWindow()
+        port = windows.get(hwnd)
+
+        if port:
+            with open(file_path, "r", encoding="utf-8") as f:
+                x, y = map(int, f.read().split())
+
+            tap(port, x, y)
+
+    hotkeys = {
+        "z": tap_drop,
+    }
+
+    for key, func in hotkeys.items():
+        keyboard.add_hotkey(key, func)
+
+    print("\n===== test click =====")
+    print("z: vứt đồ dã tẩu")
+    print("q: Thoát")
+
+    keyboard.wait("q")
+
+    # Xóa toàn bộ hotkey
+    for key in hotkeys:
+        keyboard.remove_hotkey(key)

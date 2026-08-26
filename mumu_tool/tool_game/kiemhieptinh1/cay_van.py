@@ -173,6 +173,9 @@ def cay_van():
         for t in threads:
             t.join()
 
+    def nang_skill():
+        print("")
+
     hotkeys = {
         "w": cancel_popup_task,
         "e": cancel_tab_task,
@@ -187,6 +190,7 @@ def cay_van():
         "h": turnOffAuto("tat_mua_do"),
         "j": turnOffAuto("tat_tan_cong"),
         "k": turnOffAuto(),
+        "l": nang_skill(),
         "m": logOut,
     }
 
@@ -208,6 +212,8 @@ def cay_van():
     print("h: tắt mua đồ")
     print("j: tắt tự động đánh")
     print("k: tắt hết")
+
+    print("l: nâng skill")
 
     print("m: Log out")
     print("q: Thoát")

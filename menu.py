@@ -10,7 +10,7 @@ from mumu_tool.tool_game.kiemhieptinh1.to_doi_bst_tay import to_doi_bst_tay, loo
 from mumu_tool.tool_game.kiemhieptinh1.giao_dich_van import giao_dich_van_Hoang, giao_dich_van_Huy
 from mumu_tool.tool_game.kiemhieptinh1.tool_vut_exp import tool_vut_exp
 from mumu_tool.tool_game.kiemhieptinh1.da_tau import lam_da_tau, vut_do_da_tau
-from mumu_tool.tool_game.utils import auto_click, auto_luom, sync_mouse_keyboard, run_setup
+from mumu_tool.tool_game.utils import auto_click, auto_luom, sync_mouse_keyboard, test_click
 
 
 def run_menu(title, menu_dict):
@@ -111,4 +111,5 @@ main_menu = {
     "3": ("auto click", auto_click),
     "4": ("auto luom", auto_luom),
     "5": ("đồng bộ chuột bàn phím", menu_sync_mouse_keyboard),
+    "6": ("test click", test_click),
 }
