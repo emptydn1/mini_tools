@@ -1,2 +1,5 @@
 tạo file giao_dich_van.txt ở ngoài desktop
 tạo file accounts.txt ở ngoài desktop
+
+
+git clone https://github.com/emptydn1/mini_tools.git

@@ -111,5 +111,4 @@ main_menu = {
     "3": ("auto click", auto_click),
     "4": ("auto luom", auto_luom),
     "5": ("đồng bộ chuột bàn phím", menu_sync_mouse_keyboard),
-    "6": ("run setup", run_setup),
 }
