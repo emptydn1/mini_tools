@@ -174,7 +174,33 @@ def cay_van():
             t.join()
 
     def nang_skill():
-        print("")
+        def _nang_skill(port):
+            tap(port, 930, 285)  # chuyen qua setting
+            time.sleep(0.8)
+            tap(port, 740, 360)  # mo bang SKILL
+            time.sleep(0.3)
+            tap(port, 305, 155)  # bam skill
+            time.sleep(0.3)
+            tap(port, 630, 460)  # TANG SKILL
+            time.sleep(0.3)
+            tap(port, 875, 100)  # tat bang skill
+            time.sleep(0.5)
+
+            # thoat acc
+            tap(port, 935, 365)  # bam setting
+            time.sleep(0.5)
+            tap(port, 153, 115)
+            time.sleep(0.5)
+            tap(port, 800, 250)
+
+        threads = []
+        for port in merge_devices.values():
+            t = threading.Thread(target=_nang_skill, args=(port,))
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join()
 
     hotkeys = {
         "w": cancel_popup_task,
