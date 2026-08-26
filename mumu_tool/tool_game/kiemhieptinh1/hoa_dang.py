@@ -17,100 +17,138 @@ from mumu_tool.config import merge_devices
 from mumu_tool.adb_core import check_shells_created, tap, swipe, input_text, tap_points, tap_all_devices
 
 
-def logOut_temp():
-    pointsLogOut = [(946, 257), (946, 337), (153, 115), (800, 250)]
-    tap_points(pointsLogOut, 0.5, merge_devices)
+def vi_tri_hoa_dang():
 
+    def posHoaDang(name):
+        check_shells_created()
+        # Danh sách tọa độ % bản đồ cho từng "may" (bộ tài khoản)
+        POS_PRESETS = {
+            "huy": [[39, 68], [43, 56], [48, 71], [57, 72], [64, 81], [71, 85], [63, 67], [78, 65], [86, 60], [90, 80], [44, 40], [51, 25], [84, 18], [27, 82], [29, 71], [39, 80], [49, 84], [46, 78], [62, 54], [66, 33]],
+            "hoang": [[67, 34], [52, 15], [32, 14], [75, 41], [58, 44], [46, 43], [56, 73], [62, 80], [68, 84], [72, 85], [36, 68], [47, 70], [76, 50], [84, 63], [81, 54], [48, 73], [68, 83], [57, 58], [71, 69], [71, 58]],
+            "hao": [[68, 33], [51, 25], [47, 37], [31, 49], [41, 55], [53, 57], [63, 65], [71, 67], [37, 67], [47, 68], [66, 82], [71, 84], [47, 26], [32, 15], [85, 19], [36, 68]],
+            "may4": [[55, 42], [70, 42], [68, 33], [50, 26], [39, 51], [46, 38], [33, 14], [54, 57], [40, 68], [66, 53], [75, 51], [77, 64], [77, 65], [64, 67], [65, 83], [67, 83], [70, 83], [71, 59], [52, 72], [58, 72]],
+            "may5": [[59, 45], [77, 50], [62, 57], [82, 36], [76, 59], [64, 67], [72, 68], [86, 63], [45, 78], [38, 65], [34, 37], [86, 18], [57, 63], [60, 53], [77, 64], [39, 52], [34, 27], [21, 45], [84, 55], [70, 57]],
+            "may6": [[65, 35], [90, 22], [63, 44], [79, 38], [42, 40], [32, 37], [40, 56], [64, 53], [70, 58], [80, 56], [78, 64], [67, 64], [56, 63], [48, 63], [40, 64], [42, 75], [56, 71], [39, 38], [47, 65], [85, 63]],
+        }
+        DEFAULT_POS = POS_PRESETS["huy"]
 
-def posHoaDang(name):
-    check_shells_created()
-    # Danh sách tọa độ % bản đồ cho từng "may" (bộ tài khoản)
-    POS_PRESETS = {
-        "huy": [[39, 68], [43, 56], [48, 71], [57, 72], [64, 81], [71, 85], [63, 67], [78, 65], [86, 60], [90, 80], [44, 40], [51, 25], [84, 18], [27, 82], [29, 71], [39, 80], [49, 84], [46, 78], [62, 54], [66, 33]],
-        "hoang": [[67, 34], [52, 15], [32, 14], [75, 41], [58, 44], [46, 43], [56, 73], [62, 80], [68, 84], [72, 85], [36, 68], [47, 70], [76, 50], [84, 63], [81, 54], [48, 73], [68, 83], [57, 58], [71, 69], [71, 58]],
-        "hao": [[68, 33], [51, 25], [47, 37], [31, 49], [41, 55], [53, 57], [63, 65], [71, 67], [37, 67], [47, 68], [66, 82], [71, 84], [47, 26], [32, 15], [85, 19], [36, 68]],
-        "may4": [[55, 42], [70, 42], [68, 33], [50, 26], [39, 51], [46, 38], [33, 14], [54, 57], [40, 68], [66, 53], [75, 51], [77, 64], [77, 65], [64, 67], [65, 83], [67, 83], [70, 83], [71, 59], [52, 72], [58, 72]],
-        "may5": [[59, 45], [77, 50], [62, 57], [82, 36], [76, 59], [64, 67], [72, 68], [86, 63], [45, 78], [38, 65], [34, 37], [86, 18], [57, 63], [60, 53], [77, 64], [39, 52], [34, 27], [21, 45], [84, 55], [70, 57]],
-        "may6": [[65, 35], [90, 22], [63, 44], [79, 38], [42, 40], [32, 37], [40, 56], [64, 53], [70, 58], [80, 56], [78, 64], [67, 64], [56, 63], [48, 63], [40, 64], [42, 75], [56, 71], [39, 38], [47, 65], [85, 63]],
+        pos = POS_PRESETS.get(name, DEFAULT_POS)
+
+        def _move_to_coordinate(port, x, y):
+            tap(port, 855, 60)  # click bản đồ
+            time.sleep(1)
+            tap(port, 335, 455)  # click điểm đến
+            time.sleep(1)
+            tap(port, 380, 260)  # nhập x
+            time.sleep(1)
+            input_text(port, x)
+            time.sleep(1)
+            tap(port, 555, 260)  # nhập y
+            time.sleep(1)
+            input_text(port, y)
+            time.sleep(1)
+            tap(port, 560, 335)  # đồng ý
+            time.sleep(1)
+            tap(port, 925, 200)  # click ra ngoài, gần túi, tắt bản đồ
+
+        threads = []
+
+        for port, (x, y) in zip(merge_devices.values(), pos):
+            t = threading.Thread(target=_move_to_coordinate, args=(port, x, y))
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join()
+
+    def turnOffAuto():
+        check_shells_created()
+
+        def _turn_off_auto(port):
+            swipe(port, 690, 455, 690, 455, 2000)
+            time.sleep(2)
+            tap(port, 130, 430)  # click mục nhặt đồ
+            time.sleep(2)
+            # bên trái
+            tap(port, 205, 225)
+            tap(port, 205, 260)
+            # bên phải
+            tap(port, 415, 155)
+            tap(port, 415, 190)
+            tap(port, 415, 225)
+            tap(port, 415, 260)
+
+            time.sleep(2)
+            tap(port, 130, 360)  # click mục mua đồ
+            time.sleep(2)
+            tap(port, 205, 240)
+            tap(port, 205, 275)
+            tap(port, 385, 350)
+            tap(port, 385, 215)
+
+            time.sleep(2)
+            tap(port, 130, 255)  # click mục tấn công
+            time.sleep(2)
+            tap(port, 205, 335)
+            tap(port, 205, 380)
+            tap(port, 380, 335)
+            tap(port, 380, 380)
+
+            time.sleep(2)
+            tap(port, 130, 290)  # click mục di chuyển
+            time.sleep(2)
+            tap(port, 205, 160)
+
+        threads = []
+        for port in merge_devices.values():
+            t = threading.Thread(target=_turn_off_auto, args=(port,))
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join()
+
+    def logOut():
+        pointsLogOut = [(946, 257), (946, 337), (153, 115), (800, 250)]
+        tap_points(pointsLogOut, 0.5, merge_devices)
+
+    hotkeys = {
+        "1": lambda: posHoaDang("huy"),
+        "2": lambda: posHoaDang("hoang"),
+        "3": lambda: posHoaDang("hao"),
+        "4": lambda: posHoaDang("may4"),
+        "5": lambda: posHoaDang("may5"),
+        "6": lambda: posHoaDang("may6"),
+        "g": lambda: turnOffAuto("tat_nhat_do"),
+        "h": lambda: turnOffAuto("tat_mua_do"),
+        "j": lambda: turnOffAuto("tat_tan_cong"),
+        "k": turnOffAuto,
+        "m": logOut,
     }
-    DEFAULT_POS = POS_PRESETS["huy"]
 
-    pos = POS_PRESETS.get(name, DEFAULT_POS)
+    for key, func in hotkeys.items():
+        keyboard.add_hotkey(key, func)
 
-    def _move_to_coordinate(port, x, y):
-        tap(port, 855, 60)  # click bản đồ
-        time.sleep(1)
-        tap(port, 335, 455)  # click điểm đến
-        time.sleep(1)
-        tap(port, 380, 260)  # nhập x
-        time.sleep(1)
-        input_text(port, x)
-        time.sleep(1)
-        tap(port, 555, 260)  # nhập y
-        time.sleep(1)
-        input_text(port, y)
-        time.sleep(1)
-        tap(port, 560, 335)  # đồng ý
-        time.sleep(1)
-        tap(port, 925, 200)  # click ra ngoài, gần túi, tắt bản đồ
+    print("\n===== vi tri hoa đăng =====")
+    print("1: vị trí map của huy")
+    print("2: vị trí map của hoang")
+    print("3: vị trí map của hao")
+    print("4: vị trí map của may4")
+    print("5: vị trí map của may5")
+    print("6: vị trí map của may6")
+    print("g: tắt nhặt đồ")
+    print("h: tắt mua đồ")
+    print("j: tắt tự động đánh")
+    print("k: tắt hết")
 
-    threads = []
+    print("m: Log out")
+    print("q: Thoát")
 
-    for port, (x, y) in zip(merge_devices.values(), pos):
-        t = threading.Thread(target=_move_to_coordinate, args=(port, x, y))
-        t.start()
-        threads.append(t)
+    keyboard.wait("q")
 
-    for t in threads:
-        t.join()
-
-
-def turnOffAuto():
-    check_shells_created()
-
-    def _turn_off_auto(port):
-        swipe(port, 690, 455, 690, 455, 2000)
-        time.sleep(2)
-        tap(port, 130, 430)  # click mục nhặt đồ
-        time.sleep(2)
-        # bên trái
-        tap(port, 205, 225)
-        tap(port, 205, 260)
-        # bên phải
-        tap(port, 415, 155)
-        tap(port, 415, 190)
-        tap(port, 415, 225)
-        tap(port, 415, 260)
-
-        time.sleep(2)
-        tap(port, 130, 360)  # click mục mua đồ
-        time.sleep(2)
-        tap(port, 205, 240)
-        tap(port, 205, 275)
-        tap(port, 385, 350)
-        tap(port, 385, 215)
-
-        time.sleep(2)
-        tap(port, 130, 255)  # click mục tấn công
-        time.sleep(2)
-        tap(port, 205, 335)
-        tap(port, 205, 380)
-        tap(port, 380, 335)
-        tap(port, 380, 380)
-
-        time.sleep(2)
-        tap(port, 130, 290)  # click mục di chuyển
-        time.sleep(2)
-        tap(port, 205, 160)
-
-    threads = []
-    for port in merge_devices.values():
-        t = threading.Thread(target=_turn_off_auto, args=(port,))
-        t.start()
-        threads.append(t)
-
-    for t in threads:
-        t.join()
+    # Xóa toàn bộ hotkey
+    for key in hotkeys:
+        keyboard.remove_hotkey(key)
 
 
 def vut_do_hoa_dang():
