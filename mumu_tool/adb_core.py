@@ -55,7 +55,8 @@ def send_shell_command(port, command, error_type="ERROR"):
         shells[port].stdin.flush()
         return True
     except Exception as e:
-        print(f"[{error_type}] {port}: {e}")
+        print()
+        # print(f"[{error_type}] {port}: {e}")
         # mở cái này khi muốn reconnect_device chứ mà mở hiện tại thì nó sẽ block tiến trình, tool sẽ rất chậm
         # reconnect_device(port)
         # try:

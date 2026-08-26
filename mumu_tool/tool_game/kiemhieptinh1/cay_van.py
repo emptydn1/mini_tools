@@ -212,11 +212,11 @@ def cay_van():
         "s": nv2_bst,
         "d": nv3_bst_suphu,
         "z": nhan_nv,
-        "g": turnOffAuto("tat_nhat_do"),
-        "h": turnOffAuto("tat_mua_do"),
-        "j": turnOffAuto("tat_tan_cong"),
-        "k": turnOffAuto(),
-        "l": nang_skill(),
+        "g": lambda: turnOffAuto("tat_nhat_do"),
+        "h": lambda: turnOffAuto("tat_mua_do"),
+        "j": lambda: turnOffAuto("tat_tan_cong"),
+        "k": turnOffAuto,
+        "l": nang_skill,
         "m": logOut,
     }
 
