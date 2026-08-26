@@ -183,10 +183,10 @@ def cay_van():
         "s": nv2_bst,
         "d": nv3_bst_suphu,
         "z": nhan_nv,
-        "t": turnOffAuto("tat_nhat_do"),
-        "y": turnOffAuto("tat_mua_do"),
-        "u": turnOffAuto("tat_tan_cong"),
-        "g": turnOffAuto(),
+        "g": turnOffAuto("tat_nhat_do"),
+        "h": turnOffAuto("tat_mua_do"),
+        "j": turnOffAuto("tat_tan_cong"),
+        "k": turnOffAuto(),
         "m": logOut,
     }
 
@@ -204,10 +204,10 @@ def cay_van():
     print("d: NV3 Sư phụ")
     print("z: Nhận nhiệm vụ")
 
-    print("t: tắt nhặt đồ")
-    print("y: tắt mua đồ")
-    print("u: tắt tự động đánh")
-    print("g: tắt hết")
+    print("g: tắt nhặt đồ")
+    print("h: tắt mua đồ")
+    print("j: tắt tự động đánh")
+    print("k: tắt hết")
 
     print("m: Log out")
     print("q: Thoát")
