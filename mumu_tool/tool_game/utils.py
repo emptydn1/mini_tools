@@ -122,12 +122,12 @@ def auto_luom():
             keyboard.remove_hotkey(key)
 
 
-def run_setup():
-    script_path = Path(__file__).parent / "setup.ps1"
-    if ctypes.windll.shell32.IsUserAnAdmin():
-        os.system(f'powershell -ExecutionPolicy Bypass -File "{script_path}"')
-    else:
-        ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell", f'-ExecutionPolicy Bypass -File "{script_path}"', None, 1)
+# def run_setup():
+#     script_path = Path(__file__).parent / "setup.ps1"
+#     if ctypes.windll.shell32.IsUserAnAdmin():
+#         os.system(f'powershell -ExecutionPolicy Bypass -File "{script_path}"')
+#     else:
+#         ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell", f'-ExecutionPolicy Bypass -File "{script_path}"', None, 1)
 
 
 def sync_mouse_keyboard(role):
