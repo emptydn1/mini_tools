@@ -50,7 +50,9 @@ def menu_kiemhieptinh1():
                 "2": ("Hoang", lambda: posHoaDang("hoang")),
                 "3": ("Hao", lambda: posHoaDang("hao")),
                 "4": ("may4", lambda: posHoaDang("may4")),
-                "5": ("tắt nhặt đồ, tự động đánh", turnOffAuto),
+                "5": ("may4", lambda: posHoaDang("may5")),
+                "6": ("may4", lambda: posHoaDang("may6")),
+                "7": ("tắt nhặt đồ, tự động đánh", turnOffAuto),
             }
             run_menu("sắp vị trí acc Hoa Đăng", menu)
 
