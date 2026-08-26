@@ -4,7 +4,7 @@ và vòng lặp chạy menu dùng chung.
 """
 
 from mumu_tool.tool_game.mumu.control import openAllmumuplayer, nhap_tai_khoan, hoangdnvn, menu_nhap_theo_danh_sach
-from mumu_tool.tool_game.kiemhieptinh1.hoa_dang import posHoaDang, turnOffAuto, vut_do_hoa_dang, screenshot_mode
+from mumu_tool.tool_game.kiemhieptinh1.hoa_dang import posHoaDang, turnOffAuto, vut_do_hoa_dang, screenshot_mode, logOut_temp
 from mumu_tool.tool_game.kiemhieptinh1.cay_van import cay_van
 from mumu_tool.tool_game.kiemhieptinh1.to_doi_bst_tay import to_doi_bst_tay, loop_to_doi_bst
 from mumu_tool.tool_game.kiemhieptinh1.giao_dich_van import giao_dich_van_Hoang, giao_dich_van_Huy
@@ -53,6 +53,7 @@ def menu_kiemhieptinh1():
                 "5": ("may5", lambda: posHoaDang("may5")),
                 "6": ("may6", lambda: posHoaDang("may6")),
                 "7": ("tắt nhặt đồ, tự động đánh", turnOffAuto),
+                "8": ("logout", logOut_temp),
             }
             run_menu("sắp vị trí acc Hoa Đăng", menu)
 

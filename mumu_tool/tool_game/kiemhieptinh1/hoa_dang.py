@@ -17,6 +17,11 @@ from mumu_tool.config import merge_devices
 from mumu_tool.adb_core import check_shells_created, tap, swipe, input_text, tap_points, tap_all_devices
 
 
+def logOut_temp():
+    pointsLogOut = [(946, 257), (946, 337), (153, 115), (800, 250)]
+    tap_points(pointsLogOut, 0.5, merge_devices)
+
+
 def posHoaDang(name):
     check_shells_created()
     # Danh sách tọa độ % bản đồ cho từng "may" (bộ tài khoản)

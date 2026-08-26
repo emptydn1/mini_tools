@@ -8,7 +8,7 @@ from pathlib import Path
 import win32gui
 
 
-from mumu_tool.adb_core import swipe_all_devices, check_shells_created, tap
+from mumu_tool.adb_core import swipe_all_devices, check_shells_created, tap, tap_points
 from mumu_tool.window_map import windows
 
 
