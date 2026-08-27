@@ -21,18 +21,18 @@ def cay_van():
 
     def ban_set_kim_phong():
         def _tick_do(port):
-            tap(port, 705, 125)  # đi đến tiệm dược điếm
-            time.sleep(2)
+            # tap(port, 705, 125)  # đi đến tiệm dược điếm
+            # time.sleep(2)
 
             # tap(port, 855, 60)  # click bản đồ
             # time.sleep(1)
             # tap(port, 190, 120)  # click tiệm dược điếm
             # time.sleep(2)
 
-            tap(port, 835, 255)  # nhấn nút nói chuyện
-            time.sleep(0.5)
-            tap(port, 320, 295)  # giao dịch
-            time.sleep(0.5)
+            # tap(port, 835, 255)  # nhấn nút nói chuyện
+            # time.sleep(0.5)
+            # tap(port, 320, 295)  # giao dịch
+            # time.sleep(0.5)
             tap(port, 775, 465)  # bấm nút bán nhanh
             time.sleep(0.3)
             tap(port, 215, 160)  # tick 6 ô đầu
