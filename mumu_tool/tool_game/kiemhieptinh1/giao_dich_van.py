@@ -19,7 +19,7 @@ def giao_dich_van_Hoang():
         tap(port, 852, 30)
 
     def agreeGd(port):
-        num = open(rf"C:\Users\${username}\Desktop\giao_dich_van.txt", encoding="utf-8").read().strip()
+        num = open(rf"C:\Users\{username}\Desktop\giao_dich_van.txt", encoding="utf-8").read().strip()
         gdPoints = [(333, 388), (792, 116), (318, 479)]
         for x, y in gdPoints:
             tap(port, x, y)

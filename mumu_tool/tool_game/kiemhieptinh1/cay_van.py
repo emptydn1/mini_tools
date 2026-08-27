@@ -236,23 +236,23 @@ def cay_van():
         for t in threads:
             t.join()
 
-    # so_dau_cua_account = None
+    so_dau_cua_account = None
 
-    # def tang_so_dau_cua_account():
-    #     global so_dau_cua_account
-    #     value = input("Nhập: ").strip()
+    def tang_so_dau_cua_account():
+        global so_dau_cua_account
+        value = input("Nhập: ").strip()
 
-    #     arr = value.split("-")
+        arr = value.split("-")
 
-    #     if len(arr) == 3:
-    #         so_dau_cua_account = arr[0]
-    #         ten = arr[1]
-    #         start, end = map(int, arr[2].split("+"))
+        if len(arr) == 3:
+            so_dau_cua_account = arr[0]
+            ten = arr[1]
+            start, end = map(int, arr[2].split("+"))
 
-    #         for i in range(start, end + 1):
-    #             print(f"{so_dau_cua_account}{ten}{i}")
-    #     else:
-    #         print("Sai định dạng!")
+            for i in range(start, end + 1):
+                print(f"{so_dau_cua_account}{ten}{i}")
+        else:
+            print("Sai định dạng!")
 
     hotkeys = {
         "w": cancel_popup_task,

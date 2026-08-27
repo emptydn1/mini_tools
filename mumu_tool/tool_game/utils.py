@@ -132,7 +132,7 @@ def sync_mouse_keyboard(role):
         subprocess.Popen([sys.executable, file_path, "--role", role, "--ip", "192.168.1.35"], creationflags=CREATE_NEW_CONSOLE)
     elif role == "SLAVE":
         try:
-            with open(rf"C:\Users\${username}\Desktop\mini_tools\IP.txt", "r", encoding="utf-8") as f:
+            with open(rf"C:\Users\{username}\Desktop\mini_tools\IP.txt", "r", encoding="utf-8") as f:
                 danh_sach = [line.strip() for line in f if line.strip()]
         except FileNotFoundError:
             print("❌ Không tìm thấy file IP.txt")
