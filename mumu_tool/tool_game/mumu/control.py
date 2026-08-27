@@ -45,51 +45,46 @@ def openAllmumuplayer():
 def nhap_tai_khoan():
     check_shells_created()
 
-    def _nhap_input(lan):
+    def _nhap_input():
         while True:
-            value = input(f"Nhập lần {lan} (Q để thoát): ").strip()
+            value = input("Nhập (VD: 1-huy-1+16, Q để thoát): ").strip()
 
             if value.lower() == "q":
                 return None
 
             arr = value.split("-")
 
-            if len(arr) != 3 or not arr[0].isdigit() or not arr[2].isdigit() or not arr[1]:
-                print("❌ Sai định dạng! Phải có dạng: 1-huy-1")
+            if len(arr) != 3 or not arr[0].isdigit() or not arr[1]:
+                print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
                 continue
 
-            return arr
+            range_part = arr[2].split("+")
 
-    arr1 = _nhap_input(1)
+            if len(range_part) != 2 or not range_part[0].isdigit() or not range_part[1].isdigit():
+                print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
+                continue
 
-    if arr1 is None:
+            i = int(arr[0])
+            name = arr[1]
+            start_number = int(range_part[0])
+            end_number = int(range_part[1])
+
+            if start_number > end_number:
+                print("❌ Số bắt đầu phải nhỏ hơn hoặc bằng số kết thúc!")
+                continue
+
+            return i, name, start_number, end_number
+
+    result = _nhap_input()
+
+    if result is None:
         return
 
-    arr2 = _nhap_input(2)
+    i, name, start_number, end_number = result
 
-    if arr2 is None:
-        return
+    accounts = [f"{i}{name}{j}" for j in range(start_number, end_number + 1)]
 
-    # Kiểm tra tên
-    if arr1[1] != arr2[1]:
-        print("❌ Tên 2 input phải giống nhau!")
-        return
-
-    start = int(arr1[0])
-    name = arr1[1]
-    end = int(arr2[0])
-
-    start_number = int(arr1[2])
-    end_number = int(arr2[2])
-
-    accounts = []
-    for i in range(start, end + 1):
-        temp = []
-        for j in range(start_number, end_number + 1):
-            temp.append(f"{i}{name}{j}")
-        accounts.append(temp)
-
-    input_text_list(accounts[0])
+    input_text_list(accounts)
 
 
 def hoangdnvn():
