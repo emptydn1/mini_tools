@@ -3,7 +3,7 @@ import time
 import threading
 
 from mumu_tool.config import merge_devices
-from mumu_tool.adb_core import check_shells_created, tap_points, tap_all_devices, input_text, tap, swipe
+from mumu_tool.adb_core import check_shells_created, tap_points, tap_all_devices, input_text, tap, swipe, input_text_list
 
 
 def cay_van():
@@ -236,23 +236,59 @@ def cay_van():
         for t in threads:
             t.join()
 
-    so_dau_cua_account = None
+    ################################################################################
+    ################################################################################
+    ################################################################################
+    ################################################################################
+    ################################################################################
+    ################################################################################
+    tai_khoan = {
+        "da_nhap": False,
+        "so_dau": 0,
+        "ten": "",
+        "so_bat_dau": 0,
+        "so_ket_thuc": 0,
+    }
 
-    def tang_so_dau_cua_account():
-        global so_dau_cua_account
-        value = input("Nhập: ").strip()
-
+    def nhap_du_lieu():
+        value = input("Nhập dữ liệu (ví dụ 1-huy-1+16): ").strip()
         arr = value.split("-")
-
-        if len(arr) == 3:
-            so_dau_cua_account = arr[0]
-            ten = arr[1]
-            start, end = map(int, arr[2].split("+"))
-
-            for i in range(start, end + 1):
-                print(f"{so_dau_cua_account}{ten}{i}")
-        else:
+        if len(arr) != 3:
             print("Sai định dạng!")
+            return False
+
+        try:
+            tai_khoan["so_dau"] = int(arr[0])
+            tai_khoan["ten"] = arr[1]
+            tai_khoan["so_bat_dau"], tai_khoan["so_ket_thuc"] = map(int, arr[2].split("+"))
+
+        except ValueError:
+            print("Sai định dạng!")
+            return False
+
+        tai_khoan["da_nhap"] = True
+        return True
+
+    def arr_tai_khoan():
+        return [f'{tai_khoan["so_dau"]}{tai_khoan["ten"]}{so_thu_tu}' for so_thu_tu in range(tai_khoan["so_bat_dau"], tai_khoan["so_ket_thuc"] + 1)]
+
+    def tang_so_dau():
+        if not tai_khoan["da_nhap"]:
+            if not nhap_du_lieu():
+                return
+        else:
+            tai_khoan["so_dau"] += 1
+
+        input_text_list(arr_tai_khoan())
+
+    def giam_so_dau():
+        if not tai_khoan["da_nhap"]:
+            if not nhap_du_lieu():
+                return
+        else:
+            tai_khoan["so_dau"] -= 1
+
+        input_text_list(arr_tai_khoan())
 
     hotkeys = {
         "w": cancel_popup_task,
@@ -269,6 +305,8 @@ def cay_van():
         "g": lambda: turnOffAuto("tat_nhat_do"),
         "h": lambda: turnOffAuto("tat_mua_do"),
         "j": lambda: turnOffAuto("tat_tan_cong"),
+        "u": tang_so_dau,
+        "i": giam_so_dau,
         "k": turnOffAuto,
         "l": nang_skill,
         "m": logOut,
@@ -293,6 +331,9 @@ def cay_van():
     print("h: tắt mua đồ")
     print("j: tắt tự động đánh")
     print("k: tắt hết")
+
+    print("u: tăng số đầu")
+    print("i: giảm số đầu")
 
     print("l: nâng skill")
 
