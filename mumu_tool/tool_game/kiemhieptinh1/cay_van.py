@@ -94,6 +94,26 @@ def cay_van():
         for t in threads:
             t.join()
 
+    def tang_diem_suc_manh():
+        points = [(60, 60), (455, 440), (680, 195)]
+        tap_points(points, 0.4)
+
+        def _input_diem_sinh_khi(port):
+            input_text(port, "9999")
+            time.sleep(0.4)
+            tap(port, 710, 420)
+            time.sleep(0.4)
+            tap(port, 870, 95)
+
+        threads = []
+        for port in merge_devices.values():
+            t = threading.Thread(target=_input_diem_sinh_khi, args=(port,))
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join()
+
     def nv1_bst():
         n1_bst = [(60, 155), (180, 210), (815, 460)]
         tap_points(n1_bst, 0.3, merge_devices)
@@ -239,6 +259,7 @@ def cay_van():
         "e": cancel_tab_task,
         "r": phu_phuong_tuong_trung_tam,
         "t": tang_diem_sinh_khi,
+        "y": tang_diem_suc_manh,
         "v": phu_den_diem_ban_do_kim_phong,
         "b": ban_set_kim_phong,
         "a": nv1_bst,
@@ -261,6 +282,7 @@ def cay_van():
     print("e: Hủy tab nhiệm vụ")
     print("r: phù về phượng tường trung tâm")
     print("t: tăng điểm sinh khí")
+    print("y: tăng điểm sức mạnh")
     print("b: bán đồ kim phong")
     print("a: NV1")
     print("s: NV2")
