@@ -19,6 +19,23 @@ def cay_van():
         pointsPhuongTuongTrungTam = [(801, 300), (300, 335), (300, 335), (300, 290), (300, 290)]
         tap_points(pointsPhuongTuongTrungTam)
 
+    def phu_den_diem_ban_do_kim_phong():
+        def _phu(port):
+            tap(port, 110, 225)  # click nhiệm vụ 1
+            time.sleep(0.5)
+            tap(port, 250, 370)  # click câu cá
+            time.sleep(0.5)
+            tap(port, 860, 470)  # click tham gia
+
+        threads = []
+        for port in merge_devices.values():
+            t = threading.Thread(target=_phu, args=(port,))
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join()
+
     def ban_set_kim_phong():
         def _tick_do(port):
             # tap(port, 705, 125)  # đi đến tiệm dược điếm
@@ -34,23 +51,17 @@ def cay_van():
             # tap(port, 320, 295)  # nhấn nút giao dịch
             # time.sleep(0.5)
 
-            tap(port, 110, 225)  # click nhiệm vụ 1
-            time.sleep(0.3)
-            tap(port, 250, 370)  # click câu cá
-            time.sleep(0.3)
-            tap(port, 860, 470)  # click tham gia
-            time.sleep(6)
             tap(port, 855, 60)  # click bản đồ
-            time.sleep(0.3)
+            time.sleep(0.5)
             tap(port, 190, 340)  # click được điểm
-            time.sleep(0.3)
+            time.sleep(0.5)
             tap(port, 855, 60)  # click bản đồ, hủy mở bản đồ
-            time.sleep(6)
+            time.sleep(7)
             tap(port, 320, 295)  # nhấn nút giao dịch
-            time.sleep(0.3)
+            time.sleep(0.5)
 
             tap(port, 775, 480)  # bấm nút bán nhanh
-            time.sleep(0.3)
+            time.sleep(0.5)
             tap(port, 215, 160)  # tick 6 ô đầu
             tap(port, 275, 160)
             tap(port, 335, 160)
@@ -218,29 +229,30 @@ def cay_van():
         for t in threads:
             t.join()
 
-    so_dau_cua_account = None
+    # so_dau_cua_account = None
 
-    def tang_so_dau_cua_account():
-        global so_dau_cua_account
-        value = input("Nhập: ").strip()
+    # def tang_so_dau_cua_account():
+    #     global so_dau_cua_account
+    #     value = input("Nhập: ").strip()
 
-        arr = value.split("-")
+    #     arr = value.split("-")
 
-        if len(arr) == 3:
-            so_dau_cua_account = arr[0]
-            ten = arr[1]
-            start, end = map(int, arr[2].split("+"))
+    #     if len(arr) == 3:
+    #         so_dau_cua_account = arr[0]
+    #         ten = arr[1]
+    #         start, end = map(int, arr[2].split("+"))
 
-            for i in range(start, end + 1):
-                print(f"{so_dau_cua_account}{ten}{i}")
-        else:
-            print("Sai định dạng!")
+    #         for i in range(start, end + 1):
+    #             print(f"{so_dau_cua_account}{ten}{i}")
+    #     else:
+    #         print("Sai định dạng!")
 
     hotkeys = {
         "w": cancel_popup_task,
         "e": cancel_tab_task,
         "r": phu_phuong_tuong_trung_tam,
         "t": tang_diem_sinh_khi,
+        "v": phu_den_diem_ban_do_kim_phong,
         "b": ban_set_kim_phong,
         "a": nv1_bst,
         "s": nv2_bst,
