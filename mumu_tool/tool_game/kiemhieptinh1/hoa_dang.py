@@ -208,8 +208,10 @@ def screenshot_mode():
     print("Q. Thoát")
     print("==========================================")
 
+    username = os.environ.get("USERNAME") or os.environ.get("USER")
+
     def add_number_to_file(image_path, number):
-        output_path = rf"C:\Users\huy\Desktop\mini_tools\file\{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_{time.time_ns()}.png"
+        output_path = rf"C:\Users\${username}\Desktop\mini_tools\file\{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_{time.time_ns()}.png"
         img = Image.open(image_path)
         draw = ImageDraw.Draw(img)
         font = ImageFont.truetype("arial.ttf", 500)
@@ -219,7 +221,7 @@ def screenshot_mode():
         img.save(output_path)
 
     def take_new_photo():
-        folder = r"C:\Users\huy\Pictures\Screenshots"
+        folder = rf"C:\Users\${username}\Pictures\Screenshots"
         pattern = re.compile(r"Screenshot \((\d+)\)\.png")
         max_n = 0
         with os.scandir(folder) as entries:

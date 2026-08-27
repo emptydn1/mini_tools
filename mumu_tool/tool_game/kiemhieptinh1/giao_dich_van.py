@@ -1,5 +1,6 @@
 import keyboard
 import time
+import os
 import threading
 
 from mumu_tool.config import merge_devices
@@ -9,6 +10,8 @@ from mumu_tool.adb_core import check_shells_created, input_text, tap, tap_points
 def giao_dich_van_Hoang():
     check_shells_created()
 
+    username = os.environ.get("USERNAME") or os.environ.get("USER")
+
     def action_port(port):
         tap(port, 797, 478)
 
@@ -16,7 +19,7 @@ def giao_dich_van_Hoang():
         tap(port, 852, 30)
 
     def agreeGd(port):
-        num = open(r"C:\Users\huy\Desktop\giao_dich_van.txt", encoding="utf-8").read().strip()
+        num = open(rf"C:\Users\${username}\Desktop\giao_dich_van.txt", encoding="utf-8").read().strip()
         gdPoints = [(333, 388), (792, 116), (318, 479)]
         for x, y in gdPoints:
             tap(port, x, y)

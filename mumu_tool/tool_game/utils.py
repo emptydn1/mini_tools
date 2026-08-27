@@ -6,6 +6,7 @@ import sys
 import subprocess
 from pathlib import Path
 import win32gui
+import os
 
 
 from mumu_tool.adb_core import swipe_all_devices, check_shells_created, tap, tap_points
@@ -125,12 +126,13 @@ def auto_luom():
 def sync_mouse_keyboard(role):
     CREATE_NEW_CONSOLE = 0x00000010
     file_path = Path(__file__).parent / "sync.py"
+    username = os.environ.get("USERNAME") or os.environ.get("USER")
 
     if role == "MASTER":
         subprocess.Popen([sys.executable, file_path, "--role", role, "--ip", "192.168.1.35"], creationflags=CREATE_NEW_CONSOLE)
     elif role == "SLAVE":
         try:
-            with open(r"C:\Users\huy\Desktop\mini_tools\IP.txt", "r", encoding="utf-8") as f:
+            with open(rf"C:\Users\${username}\Desktop\mini_tools\IP.txt", "r", encoding="utf-8") as f:
                 danh_sach = [line.strip() for line in f if line.strip()]
         except FileNotFoundError:
             print("❌ Không tìm thấy file IP.txt")

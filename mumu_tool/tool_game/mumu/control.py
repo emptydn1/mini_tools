@@ -101,13 +101,12 @@ def menu_nhap_theo_danh_sach():
     check_shells_created()
 
     username = os.environ.get("USERNAME") or os.environ.get("USER")
-    file_path = rf"C:\Users\{username}\Desktop\accounts.txt"
 
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(rf"C:\Users\{username}\Desktop\accounts.txt", "r", encoding="utf-8") as f:
             danh_sach = [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
-        print(f"❌ Không tìm thấy file {file_path}")
+        print(f"❌ Không tìm thấy file accounts.txt")
         input("Nhấn Enter để tiếp tục...")
         return
 
