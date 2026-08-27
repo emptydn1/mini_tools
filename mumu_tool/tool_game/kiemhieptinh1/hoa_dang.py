@@ -113,12 +113,12 @@ def vi_tri_hoa_dang():
         tap_points(pointsLogOut, 0.5, merge_devices)
 
     hotkeys = {
-        "1": lambda: posHoaDang("huy"),
-        "2": lambda: posHoaDang("hoang"),
-        "3": lambda: posHoaDang("hao"),
-        "4": lambda: posHoaDang("may4"),
-        "5": lambda: posHoaDang("may5"),
-        "6": lambda: posHoaDang("may6"),
+        "z": lambda: posHoaDang("huy"),
+        "x": lambda: posHoaDang("hoang"),
+        "c": lambda: posHoaDang("hao"),
+        "v": lambda: posHoaDang("may4"),
+        "b": lambda: posHoaDang("may5"),
+        "n": lambda: posHoaDang("may6"),
         "g": lambda: turnOffAuto("tat_nhat_do"),
         "h": lambda: turnOffAuto("tat_mua_do"),
         "j": lambda: turnOffAuto("tat_tan_cong"),
@@ -130,12 +130,12 @@ def vi_tri_hoa_dang():
         keyboard.add_hotkey(key, func)
 
     print("\n===== vi tri hoa đăng =====")
-    print("1: vị trí map của huy")
-    print("2: vị trí map của hoang")
-    print("3: vị trí map của hao")
-    print("4: vị trí map của may4")
-    print("5: vị trí map của may5")
-    print("6: vị trí map của may6")
+    print("z: vị trí map của huy")
+    print("x: vị trí map của hoang")
+    print("c: vị trí map của hao")
+    print("v: vị trí map của may4")
+    print("b: vị trí map của may5")
+    print("n: vị trí map của may6")
     print("g: tắt nhặt đồ")
     print("h: tắt mua đồ")
     print("j: tắt tự động đánh")

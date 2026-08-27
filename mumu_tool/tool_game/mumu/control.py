@@ -94,19 +94,25 @@ def hoangdnvn():
     input_text_list(pos)
 
 
+import os
+
+
 def menu_nhap_theo_danh_sach():
     check_shells_created()
 
+    username = os.environ.get("USERNAME") or os.environ.get("USER")
+    file_path = rf"C:\Users\{username}\Desktop\accounts.txt"
+
     try:
-        with open(r"C:\Users\huy\Desktop\accounts.txt", "r", encoding="utf-8") as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             danh_sach = [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
-        print("❌ Không tìm thấy file 1.txt")
+        print(f"❌ Không tìm thấy file {file_path}")
         input("Nhấn Enter để tiếp tục...")
         return
 
     if not danh_sach:
-        print("❌ File 1.txt không có dữ liệu.")
+        print("❌ File accounts.txt không có dữ liệu.")
         input("Nhấn Enter để tiếp tục...")
         return
 
@@ -138,25 +144,32 @@ def menu_nhap_theo_danh_sach():
 
         print(f"▶ Đã chọn: {data}")
 
-        parts = data.split()
+        arr = data.split("-")
 
-        arr1 = parts[0].split("-")
-        arr2 = parts[1].split("-")
+        if len(arr) != 3 or not arr[0].isdigit() or not arr[1]:
+            print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
+            input("\nNhấn Enter để tiếp tục...")
+            continue
 
-        start = int(arr1[0])
-        name = arr1[1]
-        end = int(arr2[0])
+        range_part = arr[2].split("+")
 
-        start_number = int(arr1[2])
-        end_number = int(arr2[2])
+        if len(range_part) != 2 or not range_part[0].isdigit() or not range_part[1].isdigit():
+            print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
+            input("\nNhấn Enter để tiếp tục...")
+            continue
 
-        accounts = []
-        for i in range(start, end + 1):
-            temp = []
-            for j in range(start_number, end_number + 1):
-                temp.append(f"{i}{name}{j}")
-            accounts.append(temp)
+        i_val = int(arr[0])
+        name = arr[1]
+        start_number = int(range_part[0])
+        end_number = int(range_part[1])
 
-        input_text_list(accounts[0])
+        if start_number > end_number:
+            print("❌ Số bắt đầu phải nhỏ hơn hoặc bằng số kết thúc!")
+            input("\nNhấn Enter để tiếp tục...")
+            continue
+
+        accounts = [f"{i_val}{name}{j}" for j in range(start_number, end_number + 1)]
+
+        input_text_list(accounts)
 
         input("\nNhấn Enter để tiếp tục...")
