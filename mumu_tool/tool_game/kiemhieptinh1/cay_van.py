@@ -6,6 +6,55 @@ from mumu_tool.config import merge_devices
 from mumu_tool.adb_core import check_shells_created, tap_points, tap_all_devices, input_text, tap, swipe, input_text_list
 
 
+class QuanLyTaiKhoan:
+    def __init__(self):
+        self.da_nhap = False
+        self.so_dau = 0
+        self.ten = ""
+        self.so_bat_dau = 0
+        self.so_ket_thuc = 0
+
+    def nhap_du_lieu(self):
+        value = input("Nhập dữ liệu (ví dụ 1-huy-1+16): ").strip()
+
+        arr = value.split("-")
+
+        if len(arr) != 3:
+            print("Sai định dạng!")
+            return False
+
+        try:
+            self.so_dau = int(arr[0])
+            self.ten = arr[1]
+            self.so_bat_dau, self.so_ket_thuc = map(int, arr[2].split("+"))
+
+        except ValueError:
+            print("Sai định dạng!")
+            return False
+
+        self.da_nhap = True
+        return True
+
+    def arr_tai_khoan(self):
+        return [f"{self.so_dau}{self.ten}{so_thu_tu}" for so_thu_tu in range(self.so_bat_dau, self.so_ket_thuc + 1)]
+
+    def tang_so_dau(self):
+        if not self.da_nhap:
+            print("Bạn cần nhập dữ liệu trước")
+            return
+
+        self.so_dau += 1
+        input_text_list(self.arr_tai_khoan())
+
+    def giam_so_dau(self):
+        if not self.da_nhap:
+            print("Bạn cần nhập dữ liệu trước")
+            return
+
+        self.so_dau -= 1
+        input_text_list(self.arr_tai_khoan())
+
+
 def cay_van():
     check_shells_created()
 
@@ -242,53 +291,8 @@ def cay_van():
     ################################################################################
     ################################################################################
     ################################################################################
-    tai_khoan = {
-        "da_nhap": False,
-        "so_dau": 0,
-        "ten": "",
-        "so_bat_dau": 0,
-        "so_ket_thuc": 0,
-    }
 
-    def nhap_du_lieu():
-        value = input("Nhập dữ liệu (ví dụ 1-huy-1+16): ").strip()
-        arr = value.split("-")
-        if len(arr) != 3:
-            print("Sai định dạng!")
-            return False
-
-        try:
-            tai_khoan["so_dau"] = int(arr[0])
-            tai_khoan["ten"] = arr[1]
-            tai_khoan["so_bat_dau"], tai_khoan["so_ket_thuc"] = map(int, arr[2].split("+"))
-
-        except ValueError:
-            print("Sai định dạng!")
-            return False
-
-        tai_khoan["da_nhap"] = True
-        return True
-
-    def arr_tai_khoan():
-        return [f'{tai_khoan["so_dau"]}{tai_khoan["ten"]}{so_thu_tu}' for so_thu_tu in range(tai_khoan["so_bat_dau"], tai_khoan["so_ket_thuc"] + 1)]
-
-    def tang_so_dau():
-        if not tai_khoan["da_nhap"]:
-            if not nhap_du_lieu():
-                return
-        else:
-            tai_khoan["so_dau"] += 1
-
-        input_text_list(arr_tai_khoan())
-
-    def giam_so_dau():
-        if not tai_khoan["da_nhap"]:
-            if not nhap_du_lieu():
-                return
-        else:
-            tai_khoan["so_dau"] -= 1
-
-        input_text_list(arr_tai_khoan())
+    tai_khoan = QuanLyTaiKhoan()
 
     hotkeys = {
         "w": cancel_popup_task,
@@ -305,8 +309,9 @@ def cay_van():
         "g": lambda: turnOffAuto("tat_nhat_do"),
         "h": lambda: turnOffAuto("tat_mua_do"),
         "j": lambda: turnOffAuto("tat_tan_cong"),
-        "u": tang_so_dau,
-        "i": giam_so_dau,
+        "`": tai_khoan.nhap_du_lieu,
+        "u": tai_khoan.tang_so_dau,
+        "i": tai_khoan.giam_so_dau,
         "k": turnOffAuto,
         "l": nang_skill,
         "m": logOut,
@@ -332,6 +337,7 @@ def cay_van():
     print("j: tắt tự động đánh")
     print("k: tắt hết")
 
+    print("`: nhập số đầu")
     print("u: tăng số đầu")
     print("i: giảm số đầu")
 
