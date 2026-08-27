@@ -337,7 +337,7 @@ def cay_van():
     print("j: tắt tự động đánh")
     print("k: tắt hết")
 
-    print("`: nhập số đầu")
+    print("`: nhập dữ liệu")
     print("u: tăng số đầu")
     print("i: giảm số đầu")
 
