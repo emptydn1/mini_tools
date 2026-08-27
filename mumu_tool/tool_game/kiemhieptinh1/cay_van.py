@@ -26,14 +26,30 @@ def cay_van():
 
             # tap(port, 855, 60)  # click bản đồ
             # time.sleep(1)
-            # tap(port, 190, 120)  # click tiệm dược điếm
+            # tap(port, 190, 215)  # click tiệm dược điếm
             # time.sleep(2)
 
             # tap(port, 835, 255)  # nhấn nút nói chuyện
             # time.sleep(0.5)
-            # tap(port, 320, 295)  # giao dịch
+            # tap(port, 320, 295)  # nhấn nút giao dịch
             # time.sleep(0.5)
-            tap(port, 775, 465)  # bấm nút bán nhanh
+
+            tap(port, 110, 225)  # click nhiệm vụ 1
+            time.sleep(0.3)
+            tap(port, 250, 370)  # click câu cá
+            time.sleep(0.3)
+            tap(port, 860, 470)  # click tham gia
+            time.sleep(6)
+            tap(port, 855, 60)  # click bản đồ
+            time.sleep(0.3)
+            tap(port, 190, 340)  # click được điểm
+            time.sleep(0.3)
+            tap(port, 855, 60)  # click bản đồ, hủy mở bản đồ
+            time.sleep(6)
+            tap(port, 320, 295)  # nhấn nút giao dịch
+            time.sleep(0.3)
+
+            tap(port, 775, 480)  # bấm nút bán nhanh
             time.sleep(0.3)
             tap(port, 215, 160)  # tick 6 ô đầu
             tap(port, 275, 160)
