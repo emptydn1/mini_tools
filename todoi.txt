@@ -1,0 +1,34 @@
+[
+    { pos: "", name: "", group: "pnst" },
+    { pos: "", name: "", group: "pnst" },
+    { pos: "168 65", name: "nong nhu", group: "pnst" },
+    { pos: "52 46", name: "nong tu", group: "pnst" },
+    { pos: "100 74", name: "che linh4", group: "pnst" },
+    { pos: "14 35", name: "phan my44", group: "pnst" },
+    { pos: "135 65", name: "vo quang", group: "pnst" },
+    { pos: "15 14", name: "hoang tram", group: "pnst" },
+    { pos: "148 68", name: "lam tai", group: "pnst" },
+    
+
+
+    { pos: "65 30", name: "phan long11", group: "hhnd" },
+    { pos: "8 9", name: "phan trang", group: "hhnd" },
+    { pos: "67 8", name: "bui sam5", group: "hhnd" },
+    { pos: "67 20", name: "vo minh", group: "hhnd" },
+    { pos: "46 11", name: "duong hoang", group: "hhnd" },
+    { pos: "34 36", name: "trinh dao", group: "hhnd" },
+    { pos: "9 29", name: "tham diep", group: "hhnd" },
+    
+
+
+    { pos: "", name: "", group: "dts" },
+    { pos: "63 79", name: "na linh", group: "dts" },
+    { pos: "", name: "", group: "dts" },
+    { pos: "19 71", name: "lai tu23", group: "dts" },
+    { pos: "83 96", name: "doan vinh", group: "dts" },
+    { pos: "35 69", name: "che hong22", group: "dts" },
+    { pos: "194 61", name: "le dang", group: "dts" },
+    { pos: "206 41", name: "phan hieu", group: "dts" },
+    
+
+];

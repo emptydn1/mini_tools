@@ -178,6 +178,10 @@ def to_doi_bst_tay():
         if port:
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
 
+    def logOut():
+        pointsLogOut = [(946, 257), (946, 337), (153, 115), (800, 250)]
+        tap_points(pointsLogOut, 0.5, merge_devices)
+
     hotkeys = {
         "w": to_doi,
         "e": cancel_tab_task,
@@ -187,6 +191,7 @@ def to_doi_bst_tay():
         "v": thu_nho_tab,
         "n": tang_diem_sinh_khi,
         "m": logout_and_login_1_tab,
+        ",": logOut,
     }
 
     for key, func in hotkeys.items():
@@ -203,6 +208,7 @@ def to_doi_bst_tay():
     print("v: Thu nhỏ tab")
     print("n: tăng điểm sinh khí")
     print("m: logout với acc chỉ định")
+    print(",: thoát hết")
     print("q: Thoát")
 
     keyboard.wait("q")
