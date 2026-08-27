@@ -198,7 +198,7 @@ def to_doi_bst_tay():
         keyboard.add_hotkey(key, func)
 
     print("\n===== BST =====")
-    print("w: Hủy popup nhiệm vụ")
+    print("w: tổ đội")
     print("e: Hủy tab nhiệm vụ")
 
     print("a: Nhận và trả nhiệm vụ")
@@ -206,8 +206,8 @@ def to_doi_bst_tay():
     print("d: Chuyển qua mục tổ đội")
 
     print("v: Thu nhỏ tab")
-    print("n: tăng điểm sinh khí")
-    print("m: logout với acc chỉ định")
+    print("n: tăng điểm sinh khí ALL")
+    print("m: thoát với acc chỉ định")
     print(",: thoát hết")
     print("q: Thoát")
 
