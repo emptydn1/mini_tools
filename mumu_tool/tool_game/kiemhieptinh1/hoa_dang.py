@@ -54,7 +54,7 @@ class QuanLyTaiKhoan:
             print("Bạn cần nhập dữ liệu trước")
             return
 
-        self.so_dau += 3
+        self.so_dau += 1
         input_text_list(self.arr_tai_khoan())
 
     def giam_so_dau(self):
@@ -62,7 +62,7 @@ class QuanLyTaiKhoan:
             print("Bạn cần nhập dữ liệu trước")
             return
 
-        self.so_dau -= 3
+        self.so_dau -= 1
         input_text_list(self.arr_tai_khoan())
 
 
