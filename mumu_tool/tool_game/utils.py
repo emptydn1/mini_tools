@@ -123,60 +123,6 @@ def auto_luom():
             keyboard.remove_hotkey(key)
 
 
-# def sync_mouse_keyboard(role):
-#     CREATE_NEW_CONSOLE = 0x00000010
-#     file_path = Path(__file__).parent / "sync.py"
-#     username = os.environ.get("USERNAME") or os.environ.get("USER")
-
-#     if role == "MASTER":
-#         subprocess.Popen([sys.executable, file_path, "--role", role, "--ip", "192.168.1.35"], creationflags=CREATE_NEW_CONSOLE)
-#     elif role == "SLAVE":
-#         try:
-#             with open(rf"C:\Users\{username}\Desktop\mini_tools\IP.txt", "r", encoding="utf-8") as f:
-#                 danh_sach = [line.strip() for line in f if line.strip()]
-#         except FileNotFoundError:
-#             print("❌ Không tìm thấy file IP.txt")
-#             input("Nhấn Enter để tiếp tục...")
-#             return
-
-#         if not danh_sach:
-#             print("❌ File IP.txt không có dữ liệu.")
-#             input("Nhấn Enter để tiếp tục...")
-#             return
-
-#         while True:
-#             print("\n========== NHẬP THEO DANH SÁCH ==========")
-
-#             for i, item in enumerate(danh_sach, 1):
-#                 print(f"{i}. {item}")
-
-#             print("Q. Thoát")
-#             print("==========================================")
-
-#             choice = input("Chọn: ").strip().lower()
-
-#             if choice == "q":
-#                 break
-
-#             if not choice.isdigit():
-#                 print("❌ Lựa chọn không hợp lệ.")
-#                 continue
-
-#             index = int(choice) - 1
-
-#             if index < 0 or index >= len(danh_sach):
-#                 print("❌ Lựa chọn không hợp lệ.")
-#                 continue
-
-#             data = danh_sach[index]
-
-#             print(f"▶ Đã chọn: {data}")
-
-#             subprocess.Popen([sys.executable, file_path, "--role", role, "--ip", data], creationflags=CREATE_NEW_CONSOLE)
-
-#             input("\nNhấn Enter để tiếp tục...")
-
-
 def test_click():
     check_shells_created()
     file_path = Path(__file__).parent / "click.txt"

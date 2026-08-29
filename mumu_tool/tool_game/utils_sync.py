@@ -57,17 +57,16 @@ def sync_mouse_keyboard(role):
     elif role == "SLAVE":
         danh_sach = scan_lan_ips()
 
-        if not danh_sach:
-            print("❌ Không tìm thấy IP nào đang hoạt động trong mạng LAN.")
-            input("Nhấn Enter để tiếp tục...")
-            return
-
         while True:
             print("\n========== CHỌN IP TRONG MẠNG LAN ==========")
 
-            for i, item in enumerate(danh_sach, 1):
-                print(f"{i}. {item}")
+            if danh_sach:
+                for i, item in enumerate(danh_sach, 1):
+                    print(f"{i}. {item}")
+            else:
+                print("(Không tìm thấy IP nào đang hoạt động)")
 
+            print("M. Nhập IP thủ công")
             print("R. Quét lại")
             print("Q. Thoát")
             print("=============================================")
@@ -81,17 +80,26 @@ def sync_mouse_keyboard(role):
                 danh_sach = scan_lan_ips()
                 continue
 
-            if not choice.isdigit():
-                print("❌ Lựa chọn không hợp lệ.")
-                continue
+            if choice == "m":
+                data = input("Nhập IP: ").strip()
+                try:
+                    ipaddress.ip_address(data)
+                except ValueError:
+                    print("❌ IP không hợp lệ.")
+                    continue
 
-            index = int(choice) - 1
+            else:
+                if not choice.isdigit():
+                    print("❌ Lựa chọn không hợp lệ.")
+                    continue
 
-            if index < 0 or index >= len(danh_sach):
-                print("❌ Lựa chọn không hợp lệ.")
-                continue
+                index = int(choice) - 1
 
-            data = danh_sach[index]
+                if index < 0 or index >= len(danh_sach):
+                    print("❌ Lựa chọn không hợp lệ.")
+                    continue
+
+                data = danh_sach[index]
 
             print(f"▶ Đã chọn: {data}")
 
