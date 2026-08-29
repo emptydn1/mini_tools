@@ -10,6 +10,7 @@ from mumu_tool.window_map import windows
 
 
 def loop_to_doi_bst():
+    check_shells_created()
     running_addTeam = threading.Event()
     addTeam_thread = None
 

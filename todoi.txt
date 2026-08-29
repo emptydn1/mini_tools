@@ -1,6 +1,5 @@
 [
-    { pos: "", name: "", group: "pnst" },
-    { pos: "", name: "", group: "pnst" },
+
     { pos: "168 65", name: "nong nhu", group: "pnst" },
     { pos: "52 46", name: "nong tu", group: "pnst" },
     { pos: "100 74", name: "che linh4", group: "pnst" },
@@ -21,9 +20,9 @@
     
 
 
-    { pos: "", name: "", group: "dts" },
+
     { pos: "63 79", name: "na linh", group: "dts" },
-    { pos: "", name: "", group: "dts" },
+
     { pos: "19 71", name: "lai tu23", group: "dts" },
     { pos: "83 96", name: "doan vinh", group: "dts" },
     { pos: "35 69", name: "che hong22", group: "dts" },
