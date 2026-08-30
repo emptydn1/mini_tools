@@ -13,11 +13,18 @@ def loop_to_doi_bst():
     check_shells_created()
     running_addTeam = threading.Event()
     addTeam_thread = None
+    count = 0
 
     def addTeam():
-        pointsTeam = [(190, 157), (190, 157), (500, 440), (694, 116), (900, 225), (900, 225), (900, 225)]
+        nonlocal count
+        pointsTeam = [(190, 157), (190, 157), (500, 440), (694, 116), (900, 225)]
         tap_points(pointsTeam, 0.3, merge_devices)
-        time.sleep(2)
+        if count >= 10:
+            pointsTeam = [(900, 225), (900, 225), (900, 225)]
+            tap_points(pointsTeam, 0.3, merge_devices)
+            count = 0
+        else:
+            count += 1
 
     # ---- Vòng lặp chạy liên tục addTeam ----
     def addTeam_loop():
