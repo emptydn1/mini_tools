@@ -19,7 +19,7 @@ def loop_to_doi_bst():
         nonlocal count
         pointsTeam = [(190, 157), (190, 157), (500, 440), (694, 116), (900, 225)]
         tap_points(pointsTeam, 0.3, merge_devices)
-        if count >= 10:
+        if count >= 8:
             pointsTeam = [(900, 225), (900, 225), (900, 225)]
             tap_points(pointsTeam, 0.3, merge_devices)
             count = 0
