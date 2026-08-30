@@ -201,8 +201,8 @@ def to_doi_bst_tay():
             time.sleep(0.5)
             tap(port, 190, 340)  # click được điểm
             time.sleep(0.5)
-            tap(port, 855, 60)  # click bản đồ, hủy mở bản đồ
-            time.sleep(7)
+            tap(port, 855, 60)  #  hủy mở bản đồ
+            time.sleep(3)
             tap(port, 320, 295)  # nhấn nút giao dịch
             time.sleep(0.5)
 
