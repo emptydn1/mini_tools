@@ -197,12 +197,12 @@ def to_doi_bst_tay():
 
     def ban_set_kim_phong():
         def _tick_do(port):
-            tap(port, 855, 60)  # click bản đồ
-            time.sleep(0.5)
-            tap(port, 190, 340)  # click được điểm
-            time.sleep(0.5)
-            tap(port, 855, 60)  #  hủy mở bản đồ
-            time.sleep(3)
+            # tap(port, 855, 60)  # click bản đồ
+            # time.sleep(0.5)
+            # tap(port, 190, 340)  # click được điểm
+            # time.sleep(0.5)
+            # tap(port, 855, 60)  #  hủy mở bản đồ
+            # time.sleep(3)
             tap(port, 320, 295)  # nhấn nút giao dịch
             time.sleep(0.5)
 
