@@ -191,12 +191,76 @@ def to_doi_bst_tay():
         pointsLogOut = [(946, 257), (946, 337), (153, 115), (800, 250)]
         tap_points(pointsLogOut, 0.5, merge_devices)
 
+    def phu_phuong_tuong_trung_tam():
+        pointsPhuongTuongTrungTam = [(801, 300), (300, 335), (300, 335), (300, 290), (300, 290)]
+        tap_points(pointsPhuongTuongTrungTam)
+
+    def ban_set_kim_phong():
+        def _tick_do(port):
+            tap(port, 855, 60)  # click bản đồ
+            time.sleep(0.5)
+            tap(port, 190, 340)  # click được điểm
+            time.sleep(0.5)
+            tap(port, 855, 60)  # click bản đồ, hủy mở bản đồ
+            time.sleep(7)
+            tap(port, 320, 295)  # nhấn nút giao dịch
+            time.sleep(0.5)
+
+            tap(port, 775, 480)  # bấm nút bán nhanh
+            time.sleep(0.5)
+            tap(port, 215, 160)  # tick 6 ô đầu
+            tap(port, 275, 160)
+            tap(port, 335, 160)
+            tap(port, 395, 160)
+            tap(port, 455, 160)
+            tap(port, 515, 160)
+            tap(port, 575, 160)
+
+            tap(port, 215, 255)  # tick 6 ô thứ 2
+            tap(port, 275, 255)
+            tap(port, 335, 255)
+            tap(port, 395, 255)
+            tap(port, 455, 255)
+            tap(port, 515, 255)
+            tap(port, 575, 255)
+
+        threads = []
+        for port in merge_devices.values():
+            t = threading.Thread(target=_tick_do, args=(port,))
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join()
+
+    def phu_den_boss_sat_thu():
+        def _phu(port):
+            tap(port, 595, 30)  # click cẩm nang
+            time.sleep(0.5)
+            tap(port, 250, 275)  # click bst
+            time.sleep(0.5)
+            tap(port, 860, 470)  # click tham gia
+
+        threads = []
+        for port in merge_devices.values():
+            t = threading.Thread(target=_phu, args=(port,))
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join()
+
     hotkeys = {
         "w": to_doi,
         "e": cancel_tab_task,
         "a": nhan_va_tra_nhiem_vu,
         "s": switch_tab_nv,
         "d": switch_tab_to_doi,
+        ##
+        "j": phu_phuong_tuong_trung_tam,
+        "k": phu_den_boss_sat_thu,
+        "l": ban_set_kim_phong,
+        ##
         "v": thu_nho_tab,
         "n": tang_diem_sinh_khi,
         "m": logout_and_login_1_tab,
@@ -213,6 +277,10 @@ def to_doi_bst_tay():
     print("a: Nhận và trả nhiệm vụ")
     print("s: Chuyển qua mục nhiệm vụ")
     print("d: Chuyển qua mục tổ đội")
+
+    print("j: phù về phượng tường")
+    print("k: cẩm nang -> Boss Sat Thu")
+    print("l: bán đồ kim phong")
 
     print("v: Thu nhỏ tab")
     print("n: tăng điểm sinh khí ALL")
