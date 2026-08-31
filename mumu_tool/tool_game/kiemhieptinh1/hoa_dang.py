@@ -24,6 +24,7 @@ class QuanLyTaiKhoan:
         self.ten = ""
         self.so_bat_dau = 0
         self.so_ket_thuc = 0
+        self.gia_tri_tang_giam = 3
 
     def nhap_du_lieu(self):
         value = input("Nhập dữ liệu (ví dụ 1-huy-1+16): ").strip()
@@ -46,6 +47,14 @@ class QuanLyTaiKhoan:
         self.da_nhap = True
         return True
 
+    def nhap_du_lieu_gia_tri_tang_giam(self):
+        value = input("Nhập giá trị tăng giảm: ").strip()
+
+        if value.isdigit():
+            self.gia_tri_tang_giam = int(value)
+        else:
+            print("Sai định dạng, vui lòng nhập số")
+
     def arr_tai_khoan(self):
         return [f"{self.so_dau}{self.ten}{so_thu_tu}" for so_thu_tu in range(self.so_bat_dau, self.so_ket_thuc + 1)]
 
@@ -54,7 +63,7 @@ class QuanLyTaiKhoan:
             print("Bạn cần nhập dữ liệu trước")
             return
 
-        self.so_dau += 1
+        self.so_dau += self.gia_tri_tang_giam
         input_text_list(self.arr_tai_khoan())
 
     def giam_so_dau(self):
@@ -62,7 +71,7 @@ class QuanLyTaiKhoan:
             print("Bạn cần nhập dữ liệu trước")
             return
 
-        self.so_dau -= 1
+        self.so_dau -= self.gia_tri_tang_giam
         input_text_list(self.arr_tai_khoan())
 
 
@@ -235,6 +244,7 @@ def vut_do_hoa_dang():
         "a": _vut_do_hoa_dang,
         "w": cancel_popup_task,
         #
+        ".": tai_khoan.nhap_du_lieu_gia_tri_tang_giam,
         "`": tai_khoan.nhap_du_lieu,
         "=": tai_khoan.tang_so_dau,
         "-": tai_khoan.giam_so_dau,
@@ -249,6 +259,7 @@ def vut_do_hoa_dang():
     print("a: vứt đồ hoa đăng")
     print("w: tắt bảng nhiệm vụ")
 
+    print(".: nhập giá trị tăng giảm")
     print("`: nhập dữ liệu")
     print("=: tăng số đầu")
     print("-: giảm số đầu")
