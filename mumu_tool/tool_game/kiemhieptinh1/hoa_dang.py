@@ -234,9 +234,11 @@ def vut_do_hoa_dang():
     hotkeys = {
         "a": _vut_do_hoa_dang,
         "w": cancel_popup_task,
+        #
         "`": tai_khoan.nhap_du_lieu,
-        "u": tai_khoan.tang_so_dau,
-        "i": tai_khoan.giam_so_dau,
+        "=": tai_khoan.tang_so_dau,
+        "-": tai_khoan.giam_so_dau,
+        #
         "m": logOut,
     }
 
@@ -246,9 +248,11 @@ def vut_do_hoa_dang():
     print("\n===== hoa đăng =====")
     print("a: vứt đồ hoa đăng")
     print("w: tắt bảng nhiệm vụ")
+
     print("`: nhập dữ liệu")
-    print("u: tăng số đầu")
-    print("i: giảm số đầu")
+    print("=: tăng số đầu")
+    print("-: giảm số đầu")
+
     print("m: Log out")
     print("q: Thoát Cày Vạn")
 
