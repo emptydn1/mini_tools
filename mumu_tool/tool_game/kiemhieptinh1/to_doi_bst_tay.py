@@ -5,8 +5,66 @@ import win32gui
 import win32con
 
 from mumu_tool.config import merge_devices
-from mumu_tool.adb_core import check_shells_created, tap_points, input_text, tap
+from mumu_tool.adb_core import check_shells_created, tap_points, input_text, tap, input_text_list
 from mumu_tool.window_map import windows
+
+
+class QuanLyTaiKhoan:
+    def __init__(self):
+        self.da_nhap = False
+        self.so_dau = 0
+        self.ten = ""
+        self.so_bat_dau = 0
+        self.so_ket_thuc = 0
+        self.gia_tri_tang_giam = 3
+
+    def nhap_du_lieu(self):
+        value = input("Nhập dữ liệu (ví dụ 1-huy-1+16): ").strip()
+
+        arr = value.split("-")
+
+        if len(arr) != 3:
+            print("Sai định dạng!")
+            return False
+
+        try:
+            self.so_dau = int(arr[0])
+            self.ten = arr[1]
+            self.so_bat_dau, self.so_ket_thuc = map(int, arr[2].split("+"))
+
+        except ValueError:
+            print("Sai định dạng!")
+            return False
+
+        self.da_nhap = True
+        return True
+
+    def nhap_du_lieu_gia_tri_tang_giam(self):
+        value = input("Nhập giá trị tăng giảm: ").strip()
+
+        if value.isdigit():
+            self.gia_tri_tang_giam = int(value)
+        else:
+            print("Sai định dạng, vui lòng nhập số")
+
+    def arr_tai_khoan(self):
+        return [f"{self.so_dau}{self.ten}{so_thu_tu}" for so_thu_tu in range(self.so_bat_dau, self.so_ket_thuc + 1)]
+
+    def tang_so_dau(self):
+        if not self.da_nhap:
+            print("Bạn cần nhập dữ liệu trước")
+            return
+
+        self.so_dau += self.gia_tri_tang_giam
+        input_text_list(self.arr_tai_khoan())
+
+    def giam_so_dau(self):
+        if not self.da_nhap:
+            print("Bạn cần nhập dữ liệu trước")
+            return
+
+        self.so_dau -= self.gia_tri_tang_giam
+        input_text_list(self.arr_tai_khoan())
 
 
 def loop_to_doi_bst():
@@ -250,6 +308,8 @@ def to_doi_bst_tay():
         for t in threads:
             t.join()
 
+    tai_khoan = QuanLyTaiKhoan()
+
     hotkeys = {
         "w": to_doi,
         "e": cancel_tab_task,
@@ -260,6 +320,11 @@ def to_doi_bst_tay():
         "j": phu_phuong_tuong_trung_tam,
         "k": phu_den_boss_sat_thu,
         "l": ban_set_kim_phong,
+        ##
+        ".": tai_khoan.nhap_du_lieu_gia_tri_tang_giam,
+        "`": tai_khoan.nhap_du_lieu,
+        "=": tai_khoan.tang_so_dau,
+        "-": tai_khoan.giam_so_dau,
         ##
         "v": thu_nho_tab,
         "n": tang_diem_sinh_khi,
@@ -281,6 +346,11 @@ def to_doi_bst_tay():
     print("j: phù về phượng tường")
     print("k: cẩm nang -> Boss Sat Thu")
     print("l: bán đồ kim phong")
+
+    print(".: nhập giá trị tăng giảm")
+    print("`: nhập dữ liệu")
+    print("+: tăng số đầu")
+    print("-: giảm số đầu")
 
     print("v: Thu nhỏ tab")
     print("n: tăng điểm sinh khí ALL")

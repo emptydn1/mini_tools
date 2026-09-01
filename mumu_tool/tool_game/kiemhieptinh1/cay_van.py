@@ -320,8 +320,8 @@ def cay_van():
         "j": lambda: turnOffAuto("tat_tan_cong"),
         ".": tai_khoan.nhap_du_lieu_gia_tri_tang_giam,
         "`": tai_khoan.nhap_du_lieu,
-        "u": tai_khoan.tang_so_dau,
-        "i": tai_khoan.giam_so_dau,
+        "=": tai_khoan.tang_so_dau,
+        "-": tai_khoan.giam_so_dau,
         "k": turnOffAuto,
         "l": nang_skill,
         "m": logOut,
@@ -349,8 +349,8 @@ def cay_van():
 
     print(".: nhập giá trị tăng giảm")
     print("`: nhập dữ liệu")
-    print("u: tăng số đầu")
-    print("i: giảm số đầu")
+    print("+: tăng số đầu")
+    print("-: giảm số đầu")
 
     print("l: nâng skill")
 
