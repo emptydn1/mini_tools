@@ -234,7 +234,7 @@ def giao_dich_van_Huy():
     print("u: tăng offset")
     print("i: giảm offset")
     print("n: tăng điểm sinh khí")
-    print("m: set phím tắt phù")
+    print("m: phù đến tây sơn thôn")
     print(",: sử dụng bánh")
     print("t: hiển thị form thông tin nhân vật để giao dịch")
     print("o: thoát acc")

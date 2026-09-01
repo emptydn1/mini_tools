@@ -7,60 +7,6 @@ from mumu_tool.config import merge_devices
 from mumu_tool.adb_core import check_shells_created, input_text, tap, tap_points
 
 
-def giao_dich_van_Hoang():
-    check_shells_created()
-
-    username = os.environ.get("USERNAME") or os.environ.get("USER")
-
-    def action_port(port):
-        tap(port, 797, 478)
-
-    def action_cancel(port):
-        tap(port, 852, 30)
-
-    def agreeGd(port):
-        num = open(rf"C:\Users\{username}\Desktop\giao_dich_van.txt", encoding="utf-8").read().strip()
-        gdPoints = [(333, 388), (792, 116), (318, 479)]
-        for x, y in gdPoints:
-            tap(port, x, y)
-            time.sleep(0.3)
-
-        input_text(port, num)
-
-        time.sleep(0.3)
-        tap(port, 517, 300)
-
-    def run_all(func):
-        for port in merge_devices.values():
-            threading.Thread(target=func, args=(port,), daemon=True).start()
-
-    hotkeys = {
-        "j": lambda: run_all(agreeGd),
-        "k": lambda: run_all(action_port),
-        "l": lambda: run_all(action_cancel),
-    }
-
-    for key, func in hotkeys.items():
-        keyboard.add_hotkey(key, func)
-
-    print("\n===== giao dịch =====")
-    print("j: đồng ý giao dịch")
-    print("k: xác nhận")
-    print("l: tắt form giao dịch")
-    print("q: Thoát")
-
-    keyboard.wait("q")
-
-    # Xóa toàn bộ hotkey
-    for key in hotkeys:
-        keyboard.remove_hotkey(key)
-
-
-# =========================
-# Tool của Huy
-# =========================
-
-
 def giao_dich_van_Huy():
     check_shells_created()
 
@@ -100,7 +46,15 @@ def giao_dich_van_Huy():
         print(selected)
 
         for port in selected:
+            tap(port, 318, 479)
+            time.sleep(0.5)
+            input_text(port, "999999")
+            time.sleep(0.5)
+            tap(port, 517, 300)
+            time.sleep(0.5)
             tap(port, 790, 475)
+            time.sleep(0.5)
+            tap(port, 517, 300)
 
     def increase_offset():
         global offset
@@ -123,18 +77,6 @@ def giao_dich_van_Huy():
 
     def phimtat_phu():
         points = [
-            # (494, 332),  # click đại chưởng quầy
-            # (250, 292),  # click nút hỗ trợ tân thủ
-            # (250, 292),  # click nút hỗ trợ tân thủ
-            # (250, 292),  # click nút hỗ trợ tân thủ
-            # (250, 292),  # click nút hỗ trợ tân thủ
-            # (890, 263),
-            # (670, 143),
-            # (698, 439),
-            # (680, 236),
-            # (924, 209),
-            # (924, 209),
-            # (869, 95),
             (801, 300),  # phù đến tây sơn thôn
             (157, 335),
             (175, 380),
@@ -163,11 +105,6 @@ def giao_dich_van_Huy():
 
         for t in threads:
             t.join()
-
-    def sudung_banh():
-        # points = [(890, 263), (721, 140), (696, 345), (869, 95)]
-        points = [(890, 263), (721, 140), (698, 380), (740, 236), (869, 95), (869, 95), (869, 95)]
-        tap_points(points, 0.3)
 
     def logOut():
         pointsLogOut = [(946, 257), (946, 337), (153, 115), (800, 250)]
@@ -220,7 +157,6 @@ def giao_dich_van_Huy():
         "i": decrease_offset,
         "n": tangDiemSinhKhi,
         "m": phimtat_phu,
-        ",": sudung_banh,
         "t": tap_by_rows,
         "o": logOut,
     }
@@ -235,7 +171,6 @@ def giao_dich_van_Huy():
     print("i: giảm offset")
     print("n: tăng điểm sinh khí")
     print("m: phù đến tây sơn thôn")
-    print(",: sử dụng bánh")
     print("t: hiển thị form thông tin nhân vật để giao dịch")
     print("o: thoát acc")
     print("q: Thoát")
