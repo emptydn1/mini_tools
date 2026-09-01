@@ -261,7 +261,7 @@ def vut_do_hoa_dang():
 
     print(".: nhập giá trị tăng giảm")
     print("`: nhập dữ liệu")
-    print("=: tăng số đầu")
+    print("+: tăng số đầu")
     print("-: giảm số đầu")
 
     print("m: Log out")
