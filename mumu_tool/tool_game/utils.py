@@ -9,7 +9,7 @@ import win32gui
 import os
 
 
-from mumu_tool.adb_core import swipe_all_devices, check_shells_created, tap, tap_points
+from mumu_tool.adb_core import swipe_all_devices, check_shells_created, tap, tap_points, shells
 from mumu_tool.window_map import windows
 
 
@@ -124,15 +124,18 @@ def auto_luom():
 
 
 def test_click():
-    check_shells_created()
-    file_path = Path(__file__).parent / "click.txt"
+    port = "16448"
+    subprocess.run(["adb", "connect", f"127.0.0.1:{port}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    shells[port] = subprocess.Popen(["adb", "-s", f"127.0.0.1:{port}", "shell"], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+
+    username = os.environ.get("USERNAME") or os.environ.get("USER")
 
     def tap_drop():
         hwnd = win32gui.GetForegroundWindow()
         port = windows.get(hwnd)
 
         if port:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(rf"C:\Users\{username}\Desktop\click.txt", "r", encoding="utf-8") as f:
                 x, y = map(int, f.read().split())
 
             tap(port, x, y)
