@@ -70,6 +70,8 @@ class QuanLyTaiKhoan:
 
 
 def quan_ly_input():
+    check_shells_created()
+
     tai_khoan = QuanLyTaiKhoan()
 
     hotkeys = {
