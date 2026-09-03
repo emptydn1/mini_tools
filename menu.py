@@ -103,5 +103,5 @@ main_menu = {
     "4": ("auto luom", auto_luom),
     "5": ("đồng bộ chuột bàn phím", menu_sync_mouse_keyboard),
     "6": ("test click", test_click),
-    "7": ("test click", quan_ly_input),
+    "7": ("quan ly input", quan_ly_input),
 }
