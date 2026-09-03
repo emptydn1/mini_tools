@@ -1,12 +1,98 @@
 import time
 import json
 import subprocess
+import os
+import keyboard
 
 from mumu_tool.config import merge_devices, devices
 from mumu_tool.adb_core import check_shells_created, tap, input_text, input_text_list
 
 MUMU_PATH = r"C:\Program Files\Netease\MuMuPlayer\nx_main\MuMuManager.exe"
 # MUMU_PATH = r"C:\Program Files\Netease\MuMuPlayerGlobal-12.0\nx_main\MuMuManager.exe"
+
+
+class QuanLyTaiKhoan:
+    def __init__(self):
+        self.da_nhap = False
+        self.so_dau = 0
+        self.ten = ""
+        self.so_bat_dau = 0
+        self.so_ket_thuc = 0
+        self.gia_tri_tang_giam = 3
+
+    def nhap_du_lieu(self):
+        value = input("Nhập dữ liệu (ví dụ 1-huy-1+16): ").strip()
+
+        arr = value.split("-")
+
+        if len(arr) != 3:
+            print("Sai định dạng!")
+            return False
+
+        try:
+            self.so_dau = int(arr[0])
+            self.ten = arr[1]
+            self.so_bat_dau, self.so_ket_thuc = map(int, arr[2].split("+"))
+
+        except ValueError:
+            print("Sai định dạng!")
+            return False
+
+        self.da_nhap = True
+        return True
+
+    def nhap_du_lieu_gia_tri_tang_giam(self):
+        value = input("Nhập giá trị tăng giảm: ").strip()
+
+        if value.isdigit():
+            self.gia_tri_tang_giam = int(value)
+        else:
+            print("Sai định dạng, vui lòng nhập số")
+
+    def arr_tai_khoan(self):
+        return [f"{self.so_dau}{self.ten}{so_thu_tu}" for so_thu_tu in range(self.so_bat_dau, self.so_ket_thuc + 1)]
+
+    def tang_so_dau(self):
+        if not self.da_nhap:
+            print("Bạn cần nhập dữ liệu trước")
+            return
+
+        self.so_dau += self.gia_tri_tang_giam
+        input_text_list(self.arr_tai_khoan())
+
+    def giam_so_dau(self):
+        if not self.da_nhap:
+            print("Bạn cần nhập dữ liệu trước")
+            return
+
+        self.so_dau -= self.gia_tri_tang_giam
+        input_text_list(self.arr_tai_khoan())
+
+
+def quan_ly_input():
+    tai_khoan = QuanLyTaiKhoan()
+
+    hotkeys = {
+        ".": tai_khoan.nhap_du_lieu_gia_tri_tang_giam,
+        "`": tai_khoan.nhap_du_lieu,
+        "=": tai_khoan.tang_so_dau,
+        "-": tai_khoan.giam_so_dau,
+    }
+
+    for key, func in hotkeys.items():
+        keyboard.add_hotkey(key, func)
+
+    print("\n===== quản lý input =====")
+    print(".: nhập giá trị tăng giảm")
+    print("`: nhập dữ liệu")
+    print("+: tăng số đầu")
+    print("-: giảm số đầu")
+
+    keyboard.wait("q")
+
+    # Xóa toàn bộ hotkey
+    for key in hotkeys:
+        keyboard.remove_hotkey(key)
 
 
 def openAllmumuplayer():
@@ -92,9 +178,6 @@ def hoangdnvn():
 
     pos = ["hoangdnvn10", "hoangdnvn11", "hoangdnvn13", "hoangdnvn14", "hoangdnvn15", "hoangdnvn16", "hoangdnvn17", "hoangdnvn18", "hoangdnvn19", "hoangdnvn20", "hoangdnvn21", "hoangdnvn22", "hoangdnvn23", "hoangdnvn24", "hoangdnvn25", "hoangdnvn26", "hoangdnvn27", "hoangdnvn28", "hoangdnvn29", "hoangdnvn30"]
     input_text_list(pos)
-
-
-import os
 
 
 def menu_nhap_theo_danh_sach():
