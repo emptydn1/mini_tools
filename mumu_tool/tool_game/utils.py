@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 import win32gui
 import os
+import re
 
 
 from mumu_tool.adb_core import swipe_all_devices, check_shells_created, tap, tap_points, shells
@@ -130,8 +131,21 @@ def test_click():
 
     def tap_drop():
         with open(rf"C:\Users\{username}\Desktop\click.txt", "r", encoding="utf-8") as f:
-            x, y = map(int, f.read().split())
-        subprocess.run(["adb", "-s", "127.0.0.1:16448", "shell", "input", "tap", str(x), str(y)])
+            content = f.read()
+
+        positions = []
+
+        for line in content.splitlines():
+            numbers = re.findall(r"\d+", line)
+
+            if len(numbers) >= 2:
+                x = int(numbers[0])
+                y = int(numbers[-1])
+                positions.append((x, y))
+
+        for x, y in positions:
+            subprocess.run(["adb", "-s", "127.0.0.1:16448", "shell", "input", "tap", str(x), str(y)])
+            time.sleep(0.4)
 
     hotkeys = {
         "z": tap_drop,
