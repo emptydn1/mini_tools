@@ -4,7 +4,65 @@ import threading
 import time
 
 from mumu_tool.config import merge_devices
-from mumu_tool.adb_core import check_shells_created, tap_points, tap, input_text
+from mumu_tool.adb_core import check_shells_created, tap_points, tap, input_text, input_text_list
+
+
+class QuanLyTaiKhoan:
+    def __init__(self):
+        self.da_nhap = False
+        self.so_dau = 0
+        self.ten = ""
+        self.so_bat_dau = 0
+        self.so_ket_thuc = 0
+        self.gia_tri_tang_giam = 3
+
+    def nhap_du_lieu(self):
+        value = input("Nhập dữ liệu (ví dụ 1-huy-1+16): ").strip()
+
+        arr = value.split("-")
+
+        if len(arr) != 3:
+            print("Sai định dạng!")
+            return False
+
+        try:
+            self.so_dau = int(arr[0])
+            self.ten = arr[1]
+            self.so_bat_dau, self.so_ket_thuc = map(int, arr[2].split("+"))
+
+        except ValueError:
+            print("Sai định dạng!")
+            return False
+
+        self.da_nhap = True
+        return True
+
+    def nhap_du_lieu_gia_tri_tang_giam(self):
+        value = input("Nhập giá trị tăng giảm: ").strip()
+
+        if value.isdigit():
+            self.gia_tri_tang_giam = int(value)
+        else:
+            print("Sai định dạng, vui lòng nhập số")
+
+    def arr_tai_khoan(self):
+        return [f"{self.so_dau}{self.ten}{so_thu_tu}" for so_thu_tu in range(self.so_bat_dau, self.so_ket_thuc + 1)]
+
+    def tang_so_dau(self):
+        if not self.da_nhap:
+            print("Bạn cần nhập dữ liệu trước")
+            return
+
+        self.so_dau += self.gia_tri_tang_giam
+        input_text_list(self.arr_tai_khoan())
+
+    def giam_so_dau(self):
+        if not self.da_nhap:
+            print("Bạn cần nhập dữ liệu trước")
+            return
+
+        self.so_dau -= self.gia_tri_tang_giam
+        input_text_list(self.arr_tai_khoan())
 
 
 def tool_vut_exp():
@@ -66,9 +124,14 @@ def tool_vut_exp():
         pointsLogOut = [(946, 257), (946, 337), (153, 115), (800, 250)]
         tap_points(pointsLogOut, 0.5, merge_devices)
 
+    tai_khoan = QuanLyTaiKhoan()
     hotkeys = {
         "a": phim_tat_exp,
         "x": pos_vut_do,
+        ".": tai_khoan.nhap_du_lieu_gia_tri_tang_giam,
+        "`": tai_khoan.nhap_du_lieu,
+        "=": tai_khoan.tang_so_dau,
+        "-": tai_khoan.giam_so_dau,
         "m": logOut,
     }
 
@@ -78,6 +141,12 @@ def tool_vut_exp():
     print("\n===== vứt exp =====")
     print("a: đặt phím tắt exp")
     print("x: đi đến điểm chỉ định")
+
+    print(".: nhập giá trị tăng giảm")
+    print("`: nhập dữ liệu")
+    print("+: tăng số đầu")
+    print("-: giảm số đầu")
+
     print("m: log out")
     print("q: Thoát")
 
