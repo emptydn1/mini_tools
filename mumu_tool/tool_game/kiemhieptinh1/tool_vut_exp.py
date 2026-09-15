@@ -68,7 +68,7 @@ def tool_vut_exp():
 
     hotkeys = {
         "a": phim_tat_exp,
-        "s": pos_vut_do,
+        "x": pos_vut_do,
         "m": logOut,
     }
 
@@ -77,7 +77,7 @@ def tool_vut_exp():
 
     print("\n===== vứt exp =====")
     print("a: đặt phím tắt exp")
-    print("s: đi đến điểm chỉ định")
+    print("x: đi đến điểm chỉ định")
     print("m: log out")
     print("q: Thoát")
 
