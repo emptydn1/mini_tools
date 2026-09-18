@@ -6,7 +6,7 @@ import keyboard
 
 from mumu_tool.config import merge_devices, devices
 from mumu_tool.adb_core import check_shells_created, tap, input_text, input_text_list
-from mumu_tool.tool_game.utils import QuanLyTaiKhoan
+from mumu_tool.tool_game.utils import chon_tu_danh_sach
 
 MUMU_PATH = r"C:\Program Files\Netease\MuMuPlayer\nx_main\MuMuManager.exe"
 # MUMU_PATH = r"C:\Program Files\Netease\MuMuPlayerGlobal-12.0\nx_main\MuMuManager.exe"
@@ -55,75 +55,29 @@ def hoangdnvn():
 def menu_nhap_theo_danh_sach():
     check_shells_created()
 
-    username = os.environ.get("USERNAME") or os.environ.get("USER")
+    arr = chon_tu_danh_sach()
 
-    try:
-        with open(rf"C:\Users\{username}\Desktop\tai_khoan.txt", "r", encoding="utf-8") as f:
-            danh_sach = [line.strip() for line in f if line.strip()]
-    except FileNotFoundError:
-        print(f"❌ Không tìm thấy file tai_khoan.txt")
-        input("Nhấn Enter để tiếp tục...")
-        return
-
-    if not danh_sach:
-        print("❌ File tai_khoan.txt không có dữ liệu.")
-        input("Nhấn Enter để tiếp tục...")
-        return
-
-    while True:
-        print("\n========== NHẬP THEO DANH SÁCH ==========")
-
-        for i, item in enumerate(danh_sach, 1):
-            print(f"{i}. {item}")
-
-        print("Q. Thoát")
-        print("==========================================")
-
-        choice = input("Chọn: ").strip().lower()
-
-        if choice == "q":
-            break
-
-        if not choice.isdigit():
-            print("❌ Lựa chọn không hợp lệ.")
-            continue
-
-        index = int(choice) - 1
-
-        if index < 0 or index >= len(danh_sach):
-            print("❌ Lựa chọn không hợp lệ.")
-            continue
-
-        data = danh_sach[index]
-
-        print(f"▶ Đã chọn: {data}")
-
-        arr = data.split("-")
-
-        if len(arr) != 3 or not arr[0].isdigit() or not arr[1]:
-            print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
-            input("\nNhấn Enter để tiếp tục...")
-            continue
-
-        range_part = arr[2].split("+")
-
-        if len(range_part) != 2 or not range_part[0].isdigit() or not range_part[1].isdigit():
-            print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
-            input("\nNhấn Enter để tiếp tục...")
-            continue
-
-        i_val = int(arr[0])
-        name = arr[1]
-        start_number = int(range_part[0])
-        end_number = int(range_part[1])
-
-        if start_number > end_number:
-            print("❌ Số bắt đầu phải nhỏ hơn hoặc bằng số kết thúc!")
-            input("\nNhấn Enter để tiếp tục...")
-            continue
-
-        accounts = [f"{i_val}{name}{j}" for j in range(start_number, end_number + 1)]
-
-        input_text_list(accounts)
-
+    if len(arr) != 3 or not arr[0].isdigit() or not arr[1]:
+        print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
         input("\nNhấn Enter để tiếp tục...")
+        return
+    range_part = arr[2].split("+")
+
+    if len(range_part) != 2 or not range_part[0].isdigit() or not range_part[1].isdigit():
+        print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
+        input("\nNhấn Enter để tiếp tục...")
+        return
+
+    i_val = int(arr[0])
+    name = arr[1]
+    start_number = int(range_part[0])
+    end_number = int(range_part[1])
+
+    if start_number > end_number:
+        print("❌ Số bắt đầu phải nhỏ hơn hoặc bằng số kết thúc!")
+        input("\nNhấn Enter để tiếp tục...")
+        return
+
+    accounts = [f"{i_val}{name}{j}" for j in range(start_number, end_number + 1)]
+
+    input_text_list(accounts)

@@ -24,50 +24,7 @@ class QuanLyTaiKhoan:
         self.gia_tri_tang_giam = 3
 
     def nhap_du_lieu(self):
-        username = os.environ.get("USERNAME") or os.environ.get("USER")
-        file_path = rf"C:\Users\{username}\Desktop\tai_khoan.txt"
-
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                danh_sach = [line.strip() for line in f if line.strip()]
-        except FileNotFoundError:
-            print("❌ Không tìm thấy file tai_khoan.txt")
-            return False
-
-        if not danh_sach:
-            print("❌ File tai_khoan.txt không có dữ liệu.")
-            return False
-
-        # Hiển thị danh sách
-        print("\n========== CHỌN TÀI KHOẢN ==========")
-
-        for i, item in enumerate(danh_sach, 1):
-            print(f"{i}. {item}")
-
-        print("Q. Thoát")
-        print("=====================================")
-
-        choice = input("Chọn: ").strip().lower()
-
-        if choice == "q":
-            return False
-
-        if not choice.isdigit():
-            print("❌ Lựa chọn không hợp lệ.")
-            return False
-
-        index = int(choice) - 1
-
-        if index < 0 or index >= len(danh_sach):
-            print("❌ Lựa chọn không hợp lệ.")
-            return False
-
-        # Lấy dữ liệu được chọn
-        value = danh_sach[index]
-
-        print(f"▶ Đã chọn: {value}")
-
-        arr = value.split("-")
+        arr = chon_tu_danh_sach()
 
         if len(arr) != 3:
             print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
@@ -127,6 +84,54 @@ class QuanLyTaiKhoan:
 
         self.so_dau -= self.gia_tri_tang_giam
         input_text_list(self.arr_tai_khoan())
+
+
+def chon_tu_danh_sach():
+    username = os.environ.get("USERNAME") or os.environ.get("USER")
+    file_path = rf"C:\Users\{username}\Desktop\tai_khoan.txt"
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            danh_sach = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        print("❌ Không tìm thấy file tai_khoan.txt")
+        return False
+
+    if not danh_sach:
+        print("❌ File tai_khoan.txt không có dữ liệu.")
+        return False
+
+    # Hiển thị danh sách
+    print("\n========== CHỌN TÀI KHOẢN ==========")
+
+    for i, item in enumerate(danh_sach, 1):
+        print(f"{i}. {item}")
+
+    print("Q. Thoát")
+    print("=====================================")
+
+    choice = input("Chọn: ").strip().lower()
+
+    if choice == "q":
+        return False
+
+    if not choice.isdigit():
+        print("❌ Lựa chọn không hợp lệ.")
+        return False
+
+    index = int(choice) - 1
+
+    if index < 0 or index >= len(danh_sach):
+        print("❌ Lựa chọn không hợp lệ.")
+        return False
+
+    # Lấy dữ liệu được chọn
+    value = danh_sach[index]
+
+    print(f"▶ Đã chọn: {value}")
+
+    arr = value.split("-")
+    return arr
 
 
 def auto_click():

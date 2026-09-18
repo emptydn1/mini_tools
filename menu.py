@@ -40,7 +40,6 @@ def run_menu(title, menu_dict):
             print(f"Lỗi: {e}")
 
         print("\n✅ Hoàn thành!")
-        input("Nhấn Enter để tiếp tục...")
 
 
 def menu_kiemhieptinh1():
