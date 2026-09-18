@@ -42,7 +42,6 @@ class QuanLyTaiKhoan:
 
             self.so_bat_dau = int(range_part[0])
             self.so_ket_thuc = int(range_part[1])
-
         except ValueError:
             print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
             return False
