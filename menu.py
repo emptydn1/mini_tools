@@ -3,7 +3,7 @@ Hệ thống menu console: định nghĩa menu chính + menu con,
 và vòng lặp chạy menu dùng chung.
 """
 
-from mumu_tool.tool_game.mumu.control import openAllmumuplayer, nhap_tai_khoan, hoangdnvn, menu_nhap_theo_danh_sach, quan_ly_input
+from mumu_tool.tool_game.mumu.control import openAllmumuplayer, hoangdnvn, menu_nhap_theo_danh_sach
 from mumu_tool.tool_game.kiemhieptinh1.hoa_dang import vi_tri_hoa_dang, vut_do_hoa_dang, screenshot_mode
 from mumu_tool.tool_game.kiemhieptinh1.cay_van import cay_van
 from mumu_tool.tool_game.kiemhieptinh1.to_doi_bst_tay import to_doi_bst_tay, loop_to_doi_bst
@@ -81,9 +81,8 @@ def menu_kiemhieptinh1():
 def menu_mumuplayer():
     menu = {
         "1": ("mở giả lập mumuplayer", openAllmumuplayer),
-        "2": ("nhập tài khoản theo yêu cầu", nhap_tai_khoan),
-        "3": ("nhập tài khoản theo danh sách", menu_nhap_theo_danh_sach),
-        "4": ("điền thứ tự tài khoản hoangdnvn", hoangdnvn),
+        "2": ("nhập tài khoản theo danh sách", menu_nhap_theo_danh_sach),
+        "3": ("điền thứ tự tài khoản hoangdnvn", hoangdnvn),
     }
     run_menu("TOOLS MUMUPLAYER", menu)
 
@@ -103,5 +102,4 @@ main_menu = {
     "4": ("auto luom", auto_luom),
     "5": ("đồng bộ chuột bàn phím", menu_sync_mouse_keyboard),
     "6": ("test click", test_click),
-    "7": ("quan ly input", quan_ly_input),
 }

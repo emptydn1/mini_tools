@@ -12,34 +12,6 @@ MUMU_PATH = r"C:\Program Files\Netease\MuMuPlayer\nx_main\MuMuManager.exe"
 # MUMU_PATH = r"C:\Program Files\Netease\MuMuPlayerGlobal-12.0\nx_main\MuMuManager.exe"
 
 
-def quan_ly_input():
-    check_shells_created()
-
-    tai_khoan = QuanLyTaiKhoan()
-
-    hotkeys = {
-        ".": tai_khoan.nhap_du_lieu_gia_tri_tang_giam,
-        "`": tai_khoan.nhap_du_lieu,
-        "=": tai_khoan.tang_so_dau,
-        "-": tai_khoan.giam_so_dau,
-    }
-
-    for key, func in hotkeys.items():
-        keyboard.add_hotkey(key, func)
-
-    print("\n===== quản lý input =====")
-    print(".: nhập giá trị tăng giảm")
-    print("`: nhập dữ liệu")
-    print("+: tăng số đầu")
-    print("-: giảm số đầu")
-
-    keyboard.wait("q")
-
-    # Xóa toàn bộ hotkey
-    for key in hotkeys:
-        keyboard.remove_hotkey(key)
-
-
 def openAllmumuplayer():
     result = subprocess.run([MUMU_PATH, "info", "--vmindex", "all"], capture_output=True, text=True)
     players = json.loads(result.stdout)
@@ -73,51 +45,6 @@ def openAllmumuplayer():
         time.sleep(30)
 
 
-def nhap_tai_khoan():
-    check_shells_created()
-
-    def _nhap_input():
-        while True:
-            value = input("Nhập (VD: 1-huy-1+16, Q để thoát): ").strip()
-
-            if value.lower() == "q":
-                return None
-
-            arr = value.split("-")
-
-            if len(arr) != 3 or not arr[0].isdigit() or not arr[1]:
-                print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
-                continue
-
-            range_part = arr[2].split("+")
-
-            if len(range_part) != 2 or not range_part[0].isdigit() or not range_part[1].isdigit():
-                print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
-                continue
-
-            i = int(arr[0])
-            name = arr[1]
-            start_number = int(range_part[0])
-            end_number = int(range_part[1])
-
-            if start_number > end_number:
-                print("❌ Số bắt đầu phải nhỏ hơn hoặc bằng số kết thúc!")
-                continue
-
-            return i, name, start_number, end_number
-
-    result = _nhap_input()
-
-    if result is None:
-        return
-
-    i, name, start_number, end_number = result
-
-    accounts = [f"{i}{name}{j}" for j in range(start_number, end_number + 1)]
-
-    input_text_list(accounts)
-
-
 def hoangdnvn():
     check_shells_created()
 
@@ -131,15 +58,15 @@ def menu_nhap_theo_danh_sach():
     username = os.environ.get("USERNAME") or os.environ.get("USER")
 
     try:
-        with open(rf"C:\Users\{username}\Desktop\accounts.txt", "r", encoding="utf-8") as f:
+        with open(rf"C:\Users\{username}\Desktop\tai_khoan.txt", "r", encoding="utf-8") as f:
             danh_sach = [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
-        print(f"❌ Không tìm thấy file accounts.txt")
+        print(f"❌ Không tìm thấy file tai_khoan.txt")
         input("Nhấn Enter để tiếp tục...")
         return
 
     if not danh_sach:
-        print("❌ File accounts.txt không có dữ liệu.")
+        print("❌ File tai_khoan.txt không có dữ liệu.")
         input("Nhấn Enter để tiếp tục...")
         return
 
