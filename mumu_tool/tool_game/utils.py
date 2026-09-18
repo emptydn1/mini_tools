@@ -24,21 +24,78 @@ class QuanLyTaiKhoan:
         self.gia_tri_tang_giam = 3
 
     def nhap_du_lieu(self):
-        value = input("Nhập dữ liệu (ví dụ 1-huy-1+16): ").strip()
+        username = os.environ.get("USERNAME") or os.environ.get("USER")
+        file_path = rf"C:\Users\{username}\Desktop\tai_khoan.txt"
+
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                danh_sach = [line.strip() for line in f if line.strip()]
+        except FileNotFoundError:
+            print("❌ Không tìm thấy file tai_khoan.txt")
+            return False
+
+        if not danh_sach:
+            print("❌ File tai_khoan.txt không có dữ liệu.")
+            return False
+
+        # Hiển thị danh sách
+        print("\n========== CHỌN TÀI KHOẢN ==========")
+
+        for i, item in enumerate(danh_sach, 1):
+            print(f"{i}. {item}")
+
+        print("Q. Thoát")
+        print("=====================================")
+
+        choice = input("Chọn: ").strip().lower()
+
+        if choice == "q":
+            return False
+
+        if not choice.isdigit():
+            print("❌ Lựa chọn không hợp lệ.")
+            return False
+
+        index = int(choice) - 1
+
+        if index < 0 or index >= len(danh_sach):
+            print("❌ Lựa chọn không hợp lệ.")
+            return False
+
+        # Lấy dữ liệu được chọn
+        value = danh_sach[index]
+
+        print(f"▶ Đã chọn: {value}")
 
         arr = value.split("-")
 
         if len(arr) != 3:
-            print("Sai định dạng!")
+            print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
             return False
 
         try:
             self.so_dau = int(arr[0])
             self.ten = arr[1]
-            self.so_bat_dau, self.so_ket_thuc = map(int, arr[2].split("+"))
+
+            range_part = arr[2].split("+")
+
+            if len(range_part) != 2:
+                print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
+                return False
+
+            self.so_bat_dau = int(range_part[0])
+            self.so_ket_thuc = int(range_part[1])
 
         except ValueError:
-            print("Sai định dạng!")
+            print("❌ Sai định dạng! Phải có dạng: 1-huy-1+16")
+            return False
+
+        if not self.ten:
+            print("❌ Tên không được để trống.")
+            return False
+
+        if self.so_bat_dau > self.so_ket_thuc:
+            print("❌ Số bắt đầu phải nhỏ hơn hoặc bằng số kết thúc.")
             return False
 
         self.da_nhap = True
