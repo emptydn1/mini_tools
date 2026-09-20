@@ -116,15 +116,16 @@ def cay_van():
             t.join()
 
     def tang_diem_suc_manh_sinh_khi():
-        points = [(60, 60), (455, 440), (680, 223)]
+        points = [(60, 60), (455, 440), (680, 195)]
         tap_points(points, 0.4)
 
         def _input_diem_suc_manh_sinh_khi(port):
-            input_text(port, "200")  # sinh khi
             time.sleep(0.4)
-            tap(port, 680, 195)
+            input_text(port, "80")  # sức mạnh
             time.sleep(0.4)
-            input_text(port, "9999")  # suc manh
+            tap(port, 680, 223)
+            time.sleep(0.4)
+            input_text(port, "9999")  # sinh khí
             time.sleep(0.4)
             tap(port, 710, 420)
             time.sleep(0.4)

@@ -181,9 +181,7 @@ def auto_click():
 
 
 def auto_luom():
-    subprocess.run(["adb", "connect", f"127.0.0.1:16448"])
-    subprocess.run(["adb", "connect", f"127.0.0.1:16480"])
-
+    check_shells_created()
     swiping = threading.Event()
     swipe_thread = None
 
