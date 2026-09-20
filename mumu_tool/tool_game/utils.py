@@ -181,7 +181,12 @@ def auto_click():
 
 
 def auto_luom():
-    check_shells_created()
+    for port in [16448, 16480, 16512]:
+        subprocess.run(["adb", "connect", f"127.0.0.1:{port}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    for port in [16448, 16480, 16512]:
+        shells[port] = subprocess.Popen(["adb", "-s", f"127.0.0.1:{port}", "shell"], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+
     swiping = threading.Event()
     swipe_thread = None
 
