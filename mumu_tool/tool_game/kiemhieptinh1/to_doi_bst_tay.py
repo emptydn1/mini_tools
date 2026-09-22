@@ -91,11 +91,19 @@ def loop_to_doi_bst():
             paused_ports.discard(port)
         print(f"▶ Đã tiếp tục port {port}")
 
+    def thu_nho_tab():
+        hwnd = win32gui.GetForegroundWindow()
+        port = windows.get(hwnd)
+
+        if port:
+            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+
     hotkeys = {
         "i": start_addTeam,
         "o": stop_addTeam,
-        "l": pause_focused_port,
-        "k": resume_focused_port,
+        "a": pause_focused_port,
+        "s": resume_focused_port,
+        "v": thu_nho_tab,
     }
 
     for key, func in hotkeys.items():
@@ -104,8 +112,9 @@ def loop_to_doi_bst():
     print("\n===== BST =====")
     print("i: bắt đầu loop tổ đội (tất cả các port)")
     print("o: hủy loop tổ đội")
-    print("l: tạm dừng port đang focus")
-    print("k: chạy lại port đang focus")
+    print("a: tạm dừng port đang focus")
+    print("s: chạy lại port đang focus")
+    print("v: thu nhỏ")
     print("q: Thoát")
 
     try:
