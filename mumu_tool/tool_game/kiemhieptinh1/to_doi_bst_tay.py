@@ -91,6 +91,13 @@ def loop_to_doi_bst():
             paused_ports.discard(port)
         print(f"▶ Đã tiếp tục port {port}")
 
+    def nhan_skill():
+        hwnd = win32gui.GetForegroundWindow()
+        port = windows.get(hwnd)
+
+        if port:
+            tap(port, 808, 495)
+
     def thu_nho_tab():
         hwnd = win32gui.GetForegroundWindow()
         port = windows.get(hwnd)
@@ -103,6 +110,7 @@ def loop_to_doi_bst():
         "o": stop_addTeam,
         "a": pause_focused_port,
         "s": resume_focused_port,
+        "d": nhan_skill,
         "v": thu_nho_tab,
     }
 
