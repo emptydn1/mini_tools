@@ -29,7 +29,7 @@ def loop_to_doi_bst():
 
     def addTeam():
         nonlocal count
-        pointsTeam = [(190, 157), (190, 157), (500, 440), (694, 116), (900, 225)]
+        pointsTeam = [(190, 185), (190, 185), (500, 440), (694, 116), (900, 225)]
 
         with paused_lock:
             current_paused = set(paused_ports)
