@@ -181,6 +181,7 @@ def auto_click():
 
 
 def auto_luom():
+    # check_shells_created()
     for port in [16448, 16480, 16512]:
         subprocess.run(["adb", "connect", f"127.0.0.1:{port}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 

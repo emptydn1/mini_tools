@@ -56,7 +56,7 @@ def tool_vut_exp():
 
         threads = []
         for port in merge_devices.values():
-            t = threading.Thread(target=_move_to_coordinate, args=(port, 63, 48))
+            t = threading.Thread(target=_move_to_coordinate, args=(port, 70, 52))
             t.start()
             threads.append(t)
 
