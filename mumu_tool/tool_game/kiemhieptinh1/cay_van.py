@@ -141,15 +141,15 @@ def cay_van():
             t.join()
 
     def nv1_bst():
-        n1_bst = [(60, 155), (180, 210), (815, 460)]
+        n1_bst = [(60, 190), (180, 210), (815, 460)]
         tap_points(n1_bst, 0.3, merge_devices)
 
     def nv2_bst():
-        n2_bst = [(60, 155), (185, 245), (815, 460)]
+        n2_bst = [(60, 190), (185, 245), (815, 460)]
         tap_points(n2_bst, 0.3, merge_devices)
 
     def nv3_bst_suphu():
-        n2_bst = [(60, 155), (185, 175), (815, 460)]
+        n2_bst = [(60, 190), (185, 175), (815, 460)]
         tap_points(n2_bst, 0.3, merge_devices)
 
     def nhan_nv():
