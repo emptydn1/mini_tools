@@ -41,6 +41,8 @@ def openAllmumuplayer():
         time.sleep(0.5)
         tap(port, 835, 80)
         time.sleep(0.5)
+        tap(port, 835, 80)
+        time.sleep(0.5)
         tap(port, 560, 120)
         time.sleep(30)
 
