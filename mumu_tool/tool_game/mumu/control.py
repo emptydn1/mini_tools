@@ -38,11 +38,13 @@ def openAllmumuplayer():
     check_shells_created()
     for port in devices.values():
         tap(port, 835, 80)
-        time.sleep(0.5)
+        time.sleep(0.3)
         tap(port, 835, 80)
-        time.sleep(0.5)
+        time.sleep(0.3)
         tap(port, 835, 80)
-        time.sleep(0.5)
+        time.sleep(0.3)
+        tap(port, 835, 80)
+        time.sleep(0.3)
         tap(port, 560, 120)
         time.sleep(30)
 
