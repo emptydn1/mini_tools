@@ -122,6 +122,7 @@ def loop_to_doi_bst():
     print("o: hủy loop tổ đội")
     print("a: tạm dừng port đang focus")
     print("s: chạy lại port đang focus")
+    print("d: nhấn skill")
     print("v: thu nhỏ")
     print("q: Thoát")
 
