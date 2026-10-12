@@ -52,6 +52,7 @@ CLICK_SETTLE = 0.008  # ĐỒNG BỘ: client chờ (giây) trước khi click n�
 
 import ctypes
 import itertools
+import json
 import math
 import os
 import queue
@@ -287,6 +288,7 @@ def btn_down(b):
 # --------------------------------- Log ---------------------------------
 # Mọi print đi qua 1 thread riêng: hook chuột/phím không bao giờ bị chặn vì console.
 _logq = queue.SimpleQueue()
+GUI = False   # True khi chạy từ kvm_gui.py (tham số --gui): in thêm dòng trạng thái "@@KVM {json}" cho giao diện
 
 
 def log(msg):
@@ -297,12 +299,20 @@ def set_title(text):
     _logq.put((text,))
 
 
+def gui_event(d):
+    """Gửi trạng thái cho giao diện (chỉ khi chạy với --gui). Đi chung hàng đợi log nên đúng thứ tự."""
+    if GUI:
+        _logq.put(("ev", json.dumps(d)))
+
+
 def _log_loop():
     while True:
         m = _logq.get()
         try:
             if isinstance(m, tuple):
-                if kernel32 is not None:
+                if len(m) == 2:
+                    print("@@KVM " + m[1], flush=True)
+                elif kernel32 is not None and not GUI:
                     kernel32.SetConsoleTitleW(m[0])
             else:
                 print(m, flush=True)
@@ -435,11 +445,11 @@ MAX_CLIP = MAX_CLIP_MB * 1024 * 1024
 
 
 def pack_clip(items):
-    out = bytearray()
+    parts = []   # ghép 1 lần (ảnh chụp màn hình vài chục MB: bớt copy -> bớt khựng chuột lúc chuyển máy)
     for name, data in items:
         nb = name.encode()
-        out += struct.pack("<B", len(nb)) + nb + struct.pack("<I", len(data)) + data
-    return bytes(out)
+        parts += (struct.pack("<B", len(nb)), nb, struct.pack("<I", len(data)), data)
+    return b"".join(parts)
 
 
 def unpack_clip(blob):
@@ -660,8 +670,9 @@ class Link:
 
     def send_clip(self, blob):
         n = max(1, (len(blob) + CHUNK - 1) // CHUNK)
-        self._stream(iter([frame(T_CLIP, bytes([(1 if i == 0 else 0) | (2 if i == n - 1 else 0)])
-                                 + blob[i * CHUNK:(i + 1) * CHUNK]) for i in range(n)]))
+        # cắt từng đoạn NGAY LÚC GỬI (không cắt hết 1 lần): ảnh lớn không làm khựng chuột lúc vừa chuyển máy
+        self._stream(frame(T_CLIP, bytes([(1 if i == 0 else 0) | (2 if i == n - 1 else 0)])
+                           + blob[i * CHUNK:(i + 1) * CHUNK]) for i in range(n))
 
     def send_files(self, entries, total):
         tid = next(_tids)
@@ -752,7 +763,7 @@ class Link:
                 if not data:
                     break
                 buf += data
-                pos, end_all = 0, len(buf)
+                pos, end_all, mv = 0, len(buf), None
                 while end_all - pos >= 5:
                     t, n = HDR.unpack_from(buf, pos)
                     if n > CHUNK + 4096:
@@ -762,6 +773,20 @@ class Link:
                         break
                     body = bytes(buf[pos + 5:end])
                     pos = end
+                    if t == T_MOVE or t == T_SPOS:
+                        # nhiều bước di chuột đến dồn (máy đang bận) -> gộp, xử lý 1 lần: chuột nhảy thẳng tới chỗ
+                        # mới nhất thay vì chạy lại từng bước rồi trễ dần
+                        a = FMT[t].unpack(body)
+                        if mv is not None and mv[0] == t:
+                            if t == T_MOVE:
+                                a = (mv[1][0] + a[0], mv[1][1] + a[1])
+                        elif mv is not None:
+                            self._dispatch(*mv)
+                        mv = (t, a)
+                        continue
+                    if mv is not None:   # giữ đúng thứ tự: di chuột tới nơi rồi mới click/gõ phím
+                        self._dispatch(*mv)
+                        mv = None
                     if t == T_CLIP:
                         flags = body[0] if body else 0
                         if flags & 1:
@@ -781,6 +806,8 @@ class Link:
                     else:
                         s = FMT.get(t)
                         self._dispatch(t, s.unpack(body) if s else ())
+                if mv is not None:
+                    self._dispatch(*mv)
                 if pos:
                     del buf[:pos]
         except (OSError, ValueError, struct.error):
@@ -1078,6 +1105,13 @@ class Master:
         mode = "ĐỒNG BỘ tất cả máy" if self.sync else ("chuyển máy (đang KHÓA)" if self.locked else "chuyển máy")
         set_title(f"MiniKVM MASTER | Scroll Lock {'BẬT' if self.sync else 'TẮT'}: {mode} | "
                   f"Copy file: {'BẬT' if self.file_mode else 'TẮT'} | Đang ở: {where}")
+        if GUI:   # ảnh chụp trạng thái cho giao diện: chế độ, máy đang điều khiển, từng máy đã kết nối chưa
+            act = self.active
+            gui_event({"ev": "master", "sync": self.sync, "file": self.file_mode, "locked": self.locked,
+                       "active": act.ip if act else None,
+                       "peers": [{"ip": p.ip, "sync": p.sync,
+                                  "st": "off" if p.link is None else "ok" if p.ok else "old" if p.checked else "wait"}
+                                 for p in self.peer_list]})
 
     def _log_mode(self, why=""):
         why = f" ({why})" if why else ""
@@ -1451,11 +1485,13 @@ class Master:
                     link.send((T_SYNC, 1))
                     link.send((T_SPOS, rx, ry))
                     self.worker.submit(self._push_clip, peer, True)   # + clipboard chung
+            self._title()
         elif t == T_PONG and not peer.checked:
             peer.checked = True
             if not peer.ok:
                 log(f"[!] {peer.ip} đang chạy bản MiniKVM KHÁC bản này -> chỉ chuyển máy được, KHÔNG đồng bộ. "
                     "Chép file này sang máy đó rồi chạy lại")
+                self._title()
 
     def _peer_lost(self, peer):
         with self.lock:
@@ -1466,7 +1502,7 @@ class Master:
                 user32.SetCursorPos(*self.screen.park)
                 self.px, self.py = self.screen.park
                 log(f"<< Mất kết nối {peer.ip} -> quay về MASTER")
-                self._title()
+            self._title()
 
     def _peer_loop(self, peer):
         fails = 0
@@ -1489,6 +1525,7 @@ class Master:
             link.start()
             link.send((T_OPT, self.file_mode))
             log(f"[OK] Đã kết nối {peer.ip} ({peer.label})")
+            self._title()
             done.wait()
             self._peer_lost(peer)
             log(f"[X] Mất kết nối {peer.ip} - đang thử kết nối lại...")
@@ -1528,7 +1565,7 @@ class Client:
         self.screen = Screen()
         self.keys, self.btns = set(), set()   # phím/nút đang giữ (để nhả hết khi rời máy / tắt đồng bộ)
         self.clip, self.worker = Clipboard(), Worker()
-        self.edge_t = self.move_t = 0.0
+        self.edge_t = self.move_t = self.poke_t = 0.0
         self.file_mode = False   # master bật/tắt bằng phím (mặc định TẮT)
         self.sync = False        # master đang ĐỒNG BỘ (Scroll Lock BẬT) -> máy này làm theo
         self.entered = False     # CHUYỂN MÁY: chuột đang ở máy này (giữa ENTER và LEAVE)
@@ -1545,12 +1582,21 @@ class Client:
                 for d in self.screen.exit_dirs(x, y, nx, ny):
                     link.send((T_EDGE, d, self.screen.frac(d, x, y)))
         user32.SetCursorPos(nx, ny)             # đặt đúng pixel, không bị tăng tốc 2 lần
-        send_inputs(mouse_input(MOUSEEVENTF_MOVE))  # báo Windows có thao tác (không tắt màn hình)
+        self.poke()
+
+    def poke(self, force=False):
+        """Báo Windows "có thao tác chuột": không tắt màn hình, hiện lại con trỏ bị ẩn lúc gõ phím.
+        Tối đa 4 lần/giây thay vì mỗi bước di chuột: mỗi lần báo phải đi qua hook của mọi phần mềm khác trên máy
+        (MuMu, phần mềm chuột, anti-cheat...), máy nào có hook chậm là chuột bị trễ dồn."""
+        now = time.monotonic()
+        if force or now - self.poke_t >= 0.25:
+            self.poke_t = now
+            send_inputs(mouse_input(MOUSEEVENTF_MOVE))
 
     # ---------- ĐỒNG BỘ: vị trí tuyệt đối theo tỉ lệ màn hình master ----------
     def move_to(self, pos):
         user32.SetCursorPos(*pos)
-        send_inputs(mouse_input(MOUSEEVENTF_MOVE))
+        self.poke()
         self.move_t = time.perf_counter()
 
     def sync_button(self, b, down, rx, ry):
@@ -1605,6 +1651,8 @@ class Client:
         link = self.link
         set_title("MiniKVM CLIENT | " + (f"master {link.name}" if link else "chưa kết nối")
                   + (" | ĐỒNG BỘ: đang làm theo master" if link and self.sync else ""))
+        gui_event({"ev": "client", "master": link.name if link else None, "sync": bool(link and self.sync),
+                   "entered": bool(link and self.entered), "file": self.file_mode})
 
     def _on_msg(self, link, t, a):
         if link is not self.link:
@@ -1632,13 +1680,15 @@ class Client:
             self.entered, self.edge_t = True, 0.0
             self.screen.refresh()
             user32.SetCursorPos(*self.screen.entry(*a))
-            send_inputs(mouse_input(MOUSEEVENTF_MOVE))
+            self.poke(force=True)
             log(">> Chuột/bàn phím đang điều khiển máy này")
+            self._title()
         elif t == T_LEAVE:
             self.entered = False
             self.release_all()
             self.worker.submit(self._send_clip, link)
             log("<< Chuột đã rời máy này")
+            self._title()
         elif t == T_CLIP:
             self.worker.submit(self._recv_clip, a)
         elif t == T_FILES:
@@ -1651,6 +1701,7 @@ class Client:
             if on != self.file_mode:
                 self.file_mode = on
                 log(f"[COPY FILE] Master đã {'BẬT' if on else 'TẮT'} copy file")
+                self._title()
 
     def _send_clip(self, link):
         if not self.clip.changed():
@@ -1691,6 +1742,8 @@ class Client:
             srv.bind((self.bind_ip, PORT))
         except OSError as e:
             log(f"[LỖI] Không mở được cổng {PORT}: {e} (đang chạy 2 lần?)")
+            gui_event({"ev": "error", "msg": f"Cổng {PORT} đang bị chiếm - có thể kvm.py đang chạy ở cửa sổ khác"})
+            time.sleep(0.3)
             return
         srv.listen(4)
         srv.settimeout(1.0)
@@ -1746,7 +1799,7 @@ def local_ips(probe):
 
 CONFIG_NAME = "kvm_config.txt"   # nằm trên Desktop của user đang chạy kvm.py
 CONFIG_FILE = CONFIG_NAME
-CONFIG_KEYS = ("ipTable", "MASTER_IP", "SYNC_IPS", "PORT")
+CONFIG_KEYS = ("ipTable", "MASTER_IP", "SYNC_IPS", "PORT", "FILE_KEY", "LOCK_KEY", "CLICK_SETTLE", "HIDE_MASTER_CURSOR")
 CONFIG_TEMPLATE = '''# Cấu hình MiniKVM - sửa file này, KHÔNG cần sửa kvm.py. Dòng bắt đầu bằng # là ghi chú.
 # Sửa xong thì tắt kvm.py rồi chạy lại.
 
@@ -1766,6 +1819,18 @@ SYNC_IPS = None
 
 # Cổng TCP (mọi máy phải giống nhau)
 PORT = 24900
+
+# Phím bật/tắt copy file ở master (mã phím Windows): 0x13 = Pause/Break, 0x7B = F12
+FILE_KEY = 0x13
+
+# Phím khóa chuột ở máy đang dùng (chạm cạnh không chuyển máy). None = không dùng, vd 0x7A = F11
+LOCK_KEY = None
+
+# ĐỒNG BỘ: client chờ (giây) trước khi click nếu chuột vừa đổi chỗ. Click hụt thì tăng lên 0.012 - 0.02
+CLICK_SETTLE = 0.008
+
+# Ẩn con trỏ của master khi đang điều khiển máy khác (True / False)
+HIDE_MASTER_CURSOR = True
 '''
 
 
@@ -1786,13 +1851,16 @@ def load_config():
     global CONFIG_FILE
     CONFIG_FILE = os.path.join(desktop_dir(), CONFIG_NAME)
     g = globals()
+    status = "ok"
     if not os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 f.write(CONFIG_TEMPLATE)
             log(f"[CẤU HÌNH] Chưa có file -> đã tạo {CONFIG_FILE}, mở ra sửa rồi chạy lại")
+            status = "created"
         except OSError as e:
             log(f"[CẤU HÌNH] Không tạo được {CONFIG_FILE}: {e} -> dùng cấu hình trong kvm.py")
+            gui_event({"ev": "config", "path": CONFIG_FILE, "st": "error", "msg": str(e)})
             return
     try:
         with open(CONFIG_FILE, encoding="utf-8-sig") as f:
@@ -1812,29 +1880,70 @@ def load_config():
         s = vals.get("SYNC_IPS")
         if not (s is None or isinstance(s, list) and all(isinstance(v, str) for v in s)):
             raise ValueError('SYNC_IPS phải là None hoặc ["IP", ...]')
-        if not isinstance(vals.get("PORT", 1), int):
-            raise ValueError("PORT phải là số")
+        p = vals.get("PORT", 24900)
+        if type(p) is not int or not 1 <= p <= 65535:
+            raise ValueError("PORT phải là số từ 1 đến 65535")
+        fk = vals.get("FILE_KEY", g["FILE_KEY"])
+        if type(fk) is not int or not 0 < fk < 255 or fk == VK_SCROLL:
+            raise ValueError("FILE_KEY phải là mã phím, vd 0x13 (không được là Scroll Lock)")
+        lk = vals.get("LOCK_KEY", g["LOCK_KEY"])
+        if not (lk is None or type(lk) is int and 0 < lk < 255 and lk not in (VK_SCROLL, fk)):
+            raise ValueError("LOCK_KEY phải là None hoặc mã phím khác FILE_KEY và Scroll Lock")
+        cs = vals.get("CLICK_SETTLE", 0.008)
+        if type(cs) not in (int, float) or not 0 <= cs <= 0.1:
+            raise ValueError("CLICK_SETTLE phải từ 0 đến 0.1 (giây)")
+        if type(vals.get("HIDE_MASTER_CURSOR", True)) is not bool:
+            raise ValueError("HIDE_MASTER_CURSOR phải là True hoặc False")
     except (OSError, SyntaxError, ValueError) as e:
         log(f"[CẤU HÌNH] LỖI trong {CONFIG_FILE}: {e}")
         log("[CẤU HÌNH] Sửa file rồi chạy lại. Tạm dùng cấu hình trong kvm.py")
+        gui_event({"ev": "config", "path": CONFIG_FILE, "st": "error", "msg": str(e)})
         return
     g.update(vals)
+    g["KEY_NAME"] = key_name(g["FILE_KEY"])
     log(f"[CẤU HÌNH] Đọc {CONFIG_FILE}" + (f" | MASTER_IP = {MASTER_IP}" if MASTER_IP else ""))
+    gui_event({"ev": "config", "path": CONFIG_FILE, "st": status})
+
+
+def _gui_stdin():
+    """(--gui) Giao diện gửi "quit" qua stdin để dừng; giao diện bị tắt ngang (stdin đóng) cũng tự thoát,
+    không bỏ lại kvm.py chạy ngầm. Thoát tiến trình là Windows tự gỡ hook, client tự nhả phím."""
+    try:
+        for line in sys.stdin:
+            if line.strip().lower() in ("quit", "exit", "stop"):
+                break
+    except Exception:
+        pass
+    log("Đã thoát (giao diện yêu cầu dừng).")
+    time.sleep(0.3)
+    os._exit(0)
 
 
 def main():
+    global GUI
+    args = [a.lower() for a in sys.argv[1:]]
+    GUI = "--gui" in args
     if windll is None:
         print("MiniKVM chỉ chạy trên Windows.")
         return
+    if GUI:
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+        threading.Thread(target=_gui_stdin, name="gui-stdin", daemon=True).start()
     start_logger()
     win_setup()
     load_config()
-    clients =[v for row in ipTable for v in row if v and v != "MASTER"] + [v for v in (SYNC_IPS or ()) if v]
-    role = sys.argv[1].lower() if len(sys.argv) > 1 else ""
+    clients = [v for row in ipTable for v in row if v and v != "MASTER"] + [v for v in (SYNC_IPS or ()) if v]
+    role = next((a for a in args if not a.startswith("--")), "")
     if role not in ("master", "client"):
         mine = local_ips(clients[0] if clients else "8.8.8.8")
         role = "client" if mine & set(clients) else "master"
-    if not is_admin():
+    admin = is_admin()
+    gui_event({"ev": "start", "role": role, "version": VERSION, "admin": admin, "port": PORT,
+               "ips": sorted(local_ips(clients[0] if clients else "8.8.8.8"))})
+    if not admin:
         log("[!] Chưa chạy bằng Administrator: sẽ không điều khiển được cửa sổ chạy quyền admin")
     if role == "master":
         Master(sync_ips=SYNC_IPS).run()   # truyền rõ: SYNC_IPS có thể vừa được đọc từ file cấu hình
