@@ -48,14 +48,17 @@ MAX_FILE_MB = 2048    # giới hạn tổng dung lượng mỗi lần copy file/
 HIDE_MASTER_CURSOR = True   # ẩn con trỏ của master khi đang điều khiển máy khác
 CLICK_SETTLE = 0.008  # ĐỒNG BỘ: client chờ (giây) trước khi click nếu chuột vừa đổi chỗ.
                       # Rê nhanh rồi click mà máy khác click hụt thì tăng lên 0.012 - 0.02
-RAW_MOUSE = True      # CHUYỂN MÁY: gửi chuyển động GỐC của chuột, máy kia tự tính tốc độ như chuột cắm thẳng vào nó
-                      # (không bị rề khi khác độ phân giải / scale / tốc độ chuột). False = cách cũ
-MOUSE_LIKE_MASTER = True   # CHUYỂN MÁY: lúc đang điều khiển, máy kia dùng TẠM tốc độ chuột + "Enhance pointer
-                           # precision" của master (chuột đi y như ở master), rời máy thì trả lại cài đặt của nó
+RAW_MOUSE = False     # CHUYỂN MÁY - cách đưa chuột sang máy khác:
+                      #  False (mặc định, giống Deskflow): Windows MASTER tính đường đi của chuột, máy kia chỉ đặt
+                      #        con trỏ tới đúng chỗ -> đi y như ở master, máy kia bận cũng không bị trễ dồn
+                      #  True: gửi chuyển động gốc, Windows máy kia tự tính (chỉ nên dùng khi chơi game cần raw input)
+MOUSE_LIKE_MASTER = True   # (chỉ khi RAW_MOUSE = True) máy kia dùng TẠM tốc độ chuột + "Enhance pointer precision"
+                           # của master lúc đang điều khiển, rời máy thì trả lại cài đặt của nó
 # ========================================================================
 
 import collections
 import ctypes
+import gc
 import itertools
 import json
 import math
@@ -403,6 +406,7 @@ def gui_event(d):
 
 
 def _log_loop():
+    boost_thread()
     while True:
         m = _logq.get()
         try:
@@ -703,6 +707,7 @@ class Worker:
         self.q.put((fn, args))
 
     def _run(self):
+        boost_thread()
         while True:
             fn, args = self.q.get()
             try:
@@ -1593,6 +1598,7 @@ class Master:
         - Đèn Scroll Lock là chuẩn: chế độ lệch đèn quá 1 giây thì theo đèn (bấm Scroll Lock lúc đang ở màn hình
           UAC, Ctrl+Alt+Del, màn hình khóa, cửa sổ quyền admin... thì hook không thấy). Chỉ làm khi đã thấy đèn
           đổi ít nhất 1 lần (chứng tỏ đọc được đèn thật), để không bao giờ "bấm xong 1 giây tự đổi lại"."""
+        boost_thread()
         led_seen, live, bad_t, stuck_t = led_on(), False, None, 0.0
         while self.running:
             time.sleep(0.05)
@@ -1743,6 +1749,7 @@ class Master:
             self._title()
 
     def _peer_loop(self, peer):
+        boost_thread()
         fails = 0
         while self.running:
             try:
@@ -1876,25 +1883,28 @@ class Client:
         """Luồng riêng báo Windows "có thao tác chuột": không tắt màn hình, hiện lại con trỏ bị ẩn lúc gõ phím.
         Tối đa 4 lần/giây. Để riêng vì lệnh này phải đi qua hook của mọi phần mềm khác trên máy (MuMu, phần mềm
         chuột, anti-cheat...): máy nhiều giả lập có thể mất vài chục ms/lần -> không bắt luồng nhận chuột phải chờ."""
+        boost_thread()
         while True:
             self.poke_ev.wait()
             self.poke_ev.clear()
+            t0 = time.perf_counter()
             send_inputs(mouse_input(MOUSEEVENTF_MOVE))
+            self._check_slow(t0, "SendInput")
             time.sleep(0.25)
 
-    def _check_slow(self, t0, what):
-        """Windows trên máy này xử lý chuột/phím quá chậm (máy quá tải) -> báo ra cửa sổ, 10 giây tối đa 1 lần."""
+    def _check_slow(self, t0, call):
+        """Đo riêng từng lệnh Windows: lệnh nào chậm thì báo đúng lệnh đó (10 giây tối đa 1 lần)."""
         ms = (time.perf_counter() - t0) * 1000
         if ms >= SLOW_MS:
             now = time.monotonic()
             if now - self.slow_t >= 10:
                 self.slow_t = now
-                log(f"[!] Windows máy này {what} chậm: {ms:.0f} ms/lần (bình thường dưới 1 ms) -> máy đang quá tải "
-                    "(CPU/RAM/card màn hình)")
+                why = ("có phần mềm khác đang móc vào chuột/bàn phím (giả lập, phần mềm chuột/RGB, anti-cheat, "
+                       "macro...) hoặc máy quá tải") if call == "SendInput" else "máy quá tải (card màn hình/CPU)"
+                log(f"[!] Windows máy này mất {ms:.0f} ms cho 1 lệnh {call} (bình thường dưới 1 ms) -> {why}")
 
     # ---------- CHUYỂN MÁY: bước di chuột tương đối, chạm cạnh thì báo master ----------
     def move(self, link, dx, dy):
-        t0 = time.perf_counter()
         x, y = cursor_pos()
         nx, ny = x + dx, y + dy
         if not self.screen.contains(nx, ny):
@@ -1903,15 +1913,19 @@ class Client:
                 self.edge_t = now
                 for d in self.screen.exit_dirs(x, y, nx, ny):
                     link.send((T_EDGE, d, self.screen.frac(d, x, y)))
-        user32.SetCursorPos(nx, ny)             # đặt đúng pixel, không bị tăng tốc 2 lần
+        t0 = time.perf_counter()
+        user32.SetCursorPos(nx, ny)             # đặt đúng pixel, không bị tăng tốc 2 lần, không qua hook của ai
+        self._check_slow(t0, "SetCursorPos")
         self.poke_ev.set()
-        self._check_slow(t0, "di chuột")
 
     def rmove(self, link, moves):
         """CHUYỂN MÁY, chuyển động gốc (raw) của chuột master: đưa vào Windows máy này như chuột cắm thẳng vào nó
         -> Windows tự áp tốc độ chuột, gia tốc, scale màn hình của máy này: mượt y như chuột thật.
         moves = các bước đến cùng lúc: đưa vào Windows trong 1 lệnh nhưng vẫn TỪNG bước riêng (không cộng dồn)."""
-        t0 = time.perf_counter()
+        if len(moves) > 8:   # dồn quá nhiều (Windows máy này chậm): gộp bớt còn <= 8 bước, không để trễ dồn thêm
+            k = (len(moves) + 7) // 8
+            moves = [(sum(m[0] for m in moves[i:i + k]), sum(m[1] for m in moves[i:i + k]))
+                     for i in range(0, len(moves), k)]
         dx, dy = sum(m[0] for m in moves), sum(m[1] for m in moves)
         x, y = cursor_pos()
         c = self.screen.contains   # đang nằm sát mép mà vẫn đẩy ra ngoài -> báo master chuyển máy
@@ -1925,16 +1939,18 @@ class Client:
                     out.sort(key=lambda d: d < UP)   # đẩy dọc nhiều hơn -> ưu tiên trên/dưới
                 for d in out:
                     link.send((T_EDGE, d, self.screen.frac(d, x, y)))
-        send_inputs(*[mouse_input(MOUSEEVENTF_MOVE, 0, mx, my) for mx, my in moves])
-        self._check_slow(t0, "di chuột")
+        items = [mouse_input(MOUSEEVENTF_MOVE, 0, mx, my) for mx, my in moves]
+        t0 = time.perf_counter()
+        send_inputs(*items)
+        self._check_slow(t0, "SendInput")
 
     # ---------- ĐỒNG BỘ: vị trí tuyệt đối theo tỉ lệ màn hình master ----------
     def move_to(self, pos):
         t0 = time.perf_counter()
         user32.SetCursorPos(*pos)
+        self._check_slow(t0, "SetCursorPos")
         self.poke_ev.set()
         self.move_t = time.perf_counter()
-        self._check_slow(t0, "di chuột")
 
     def sync_button(self, b, down, rx, ry):
         """Lệnh click mang theo tọa độ của chính nó -> đặt chuột đúng chỗ rồi mới click."""
@@ -1968,8 +1984,8 @@ class Client:
         if f:
             t0 = time.perf_counter()
             send_inputs(mouse_input(f[0] if down else f[1], f[2]))
+            self._check_slow(t0, "SendInput")
             (self.btns.add if down else self.btns.discard)(b)
-            self._check_slow(t0, "bấm chuột")
 
     def key(self, vk, scan, fl):
         up, ext = fl & 1, fl & 2
@@ -1977,8 +1993,8 @@ class Client:
             scan = user32.MapVirtualKeyW(vk, 0) & 0xFFFF
         t0 = time.perf_counter()
         send_inputs(key_input(vk, scan, (KEYEVENTF_KEYUP if up else 0) | (KEYEVENTF_EXTENDEDKEY if ext else 0)))
+        self._check_slow(t0, "SendInput")
         (self.keys.discard if up else self.keys.add)((vk, scan, ext))
-        self._check_slow(t0, "gõ phím")
 
     def release_all(self):
         items = [key_input(vk, scan, KEYEVENTF_KEYUP | (KEYEVENTF_EXTENDEDKEY if ext else 0))
@@ -2182,12 +2198,14 @@ CLICK_SETTLE = 0.008
 # Ẩn con trỏ của master khi đang điều khiển máy khác (True / False)
 HIDE_MASTER_CURSOR = True
 
-# CHUYỂN MÁY: gửi chuyển động GỐC của chuột -> máy kia tự tính tốc độ như chuột cắm thẳng vào nó (mượt, đúng tốc độ).
-# Chuột sang máy khác bị lỗi lạ (đi sai, không đi) thì đặt False để dùng cách cũ. Chỉ cần sửa ở máy MASTER.
-RAW_MOUSE = True
+# CHUYỂN MÁY - cách đưa chuột sang máy khác (chỉ cần sửa ở máy MASTER):
+#   False (nên dùng, giống Deskflow): Windows master tính đường đi của chuột, máy kia chỉ đặt con trỏ tới đúng chỗ
+#          -> chuột đi y như ở master, máy kia bận (nhiều giả lập) cũng không bị trễ dồn
+#   True:  gửi chuyển động gốc, Windows máy kia tự tính (chỉ nên dùng khi chơi game cần raw input trên máy kia)
+RAW_MOUSE = False
 
-# CHUYỂN MÁY: lúc đang điều khiển, máy kia dùng TẠM tốc độ chuột + "Enhance pointer precision" của master -> chuột đi
-# y như ở master. Chuột rời máy đó là trả lại cài đặt của nó. False = mỗi máy dùng cài đặt chuột riêng. Sửa ở MASTER.
+# (Chỉ khi RAW_MOUSE = True) lúc đang điều khiển, máy kia dùng TẠM tốc độ chuột + "Enhance pointer precision" của
+# master, chuột rời máy đó là trả lại cài đặt của nó. False = mỗi máy dùng cài đặt chuột riêng. Sửa ở MASTER.
 MOUSE_LIKE_MASTER = True
 '''
 
@@ -2270,6 +2288,7 @@ def load_config():
 def _gui_stdin():
     """(--gui) Giao diện gửi "quit" qua stdin để dừng; giao diện bị tắt ngang (stdin đóng) cũng tự thoát,
     không bỏ lại kvm.py chạy ngầm. Thoát tiến trình là Windows tự gỡ hook, client tự nhả phím."""
+    boost_thread()
     try:
         for line in sys.stdin:
             if line.strip().lower() in ("quit", "exit", "stop"):
@@ -2297,6 +2316,8 @@ def main():
         threading.Thread(target=_gui_stdin, name="gui-stdin", daemon=True).start()
     start_logger()
     win_setup()
+    boost_thread()   # MỌI luồng của kvm cùng mức ưu tiên cao: luồng nào đang giữ khóa GIL của Python cũng không bị
+    # Windows cho "ngủ" giữa chừng (nếu không, luồng xử lý chuột phải chờ nó -> giật vài chục ms)
     load_config()
     clients = [v for row in ipTable for v in row if v and v != "MASTER"] + [v for v in (SYNC_IPS or ()) if v]
     role = next((a for a in args if not a.startswith("--")), "")
@@ -2308,6 +2329,8 @@ def main():
                "ips": sorted(local_ips(clients[0] if clients else "8.8.8.8"))})
     if not admin:
         log("[!] Chưa chạy bằng Administrator: sẽ không điều khiển được cửa sổ chạy quyền admin")
+    gc.collect()
+    gc.freeze()   # dồn hết đối tượng lúc khởi động sang vùng "đóng băng": Python dọn rác nhanh hơn, ít khựng
     if role == "master":
         Master(sync_ips=SYNC_IPS).run()   # truyền rõ: SYNC_IPS có thể vừa được đọc từ file cấu hình
     else:
