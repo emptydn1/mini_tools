@@ -1,16 +1,26 @@
 # -*- coding: utf-8 -*-
 """
-MiniKVM - 1 chuột + 1 bàn phím điều khiển nhiều PC Windows qua mạng LAN.
+MiniKVM - CHUYỂN MÁY: 1 chuột + 1 bàn phím điều khiển nhiều PC Windows qua mạng LAN.
+Tách riêng từ bản "2 trong 1" (bỏ phần đồng bộ chuột), giữ các cải thiện của bản đó: chuột đi y như ở master,
+ẩn chuột master, đo độ trễ từng máy, tự trả cài đặt chuột cho client, chạy được với app MiniKVM (--gui)...
+
+Đưa chuột ra cạnh màn hình -> sang máy bên cạnh (theo ipTable) và điều khiển riêng máy đó.
+Clipboard (chữ/ảnh) dùng chung giữa các máy, copy file bật/tắt bằng phím.
 Nhẹ: không mã hóa, không cần cài thư viện (chỉ Python 3.8+ và Win32 API qua ctypes).
+KHÔNG chạy cùng lúc với bản 2 trong 1 (cùng cổng, cùng bắt chuột/bàn phím) - tắt bản kia trước.
+
+Cấu hình: sửa ngay dưới đây. Nếu máy đã dùng app MiniKVM (kvm_gui.pyw) thì file này đọc cấu hình app đã lưu
+ở %APPDATA%\\MiniKVM\\config.json (chưa có thì đọc Desktop\\kvm_config.txt nếu còn). Không tạo file nào.
 
 Copy CÙNG MỘT file này sang mọi máy rồi chạy:
-    python kvm.py            -> tự nhận vai trò (IP có trong ipTable = client, còn lại = master)
-    python kvm.py master     -> ép chạy master
-    python kvm.py client     -> ép chạy client
-Nên chạy bằng quyền Administrator (để điều khiển được cả cửa sổ đang chạy quyền admin).
+    python kvm_chuyen_may.py            -> tự nhận vai trò (IP có trong ipTable = client, còn lại = master)
+    python kvm_chuyen_may.py master     -> ép chạy master
+    python kvm_chuyen_may.py client     -> ép chạy client
+Nên chạy bằng quyền Administrator (để điều khiển được cả cửa sổ/game đang chạy quyền admin).
 
-Scroll Lock BẬT  = khóa chuột ở màn hình hiện tại (không chuyển máy)
-Scroll Lock TẮT  = đưa chuột ra cạnh màn hình để chuyển sang máy bên cạnh
+Phím ở master:
+    Scroll Lock   BẬT (đèn sáng) = KHÓA chuột ở máy đang dùng, chạm cạnh không chuyển máy | TẮT = chuyển máy
+    Pause/Break   bật/tắt copy file giữa các máy (đổi ở FILE_KEY)
 """
 
 # =============================== CẤU HÌNH ===============================
@@ -25,17 +35,26 @@ MAX_CLIP_MB = 50      # giới hạn dung lượng clipboard mỗi lần chuyể
 FILE_KEY = 0x13       # phím BẬT/TẮT copy file ở master: 0x13 = Pause/Break (muốn dùng F12 thì đặt 0x7B)
 MAX_FILE_MB = 2048    # giới hạn tổng dung lượng mỗi lần copy file/thư mục
 HIDE_MASTER_CURSOR = True   # ẩn con trỏ của master khi đang điều khiển máy khác
+RAW_MOUSE = False     # CHUYỂN MÁY - cách đưa chuột sang máy khác:
+                      #  False (mặc định, giống Deskflow): Windows MASTER tính đường đi của chuột, máy kia chỉ đặt
+                      #        con trỏ tới đúng chỗ -> đi y như ở master, máy kia bận cũng không bị trễ dồn
+                      #  True: gửi chuyển động gốc, Windows máy kia tự tính (chỉ nên dùng khi chơi game cần raw input)
+MOUSE_LIKE_MASTER = True   # (chỉ khi RAW_MOUSE = True) máy kia dùng TẠM tốc độ chuột + "Enhance pointer precision"
+                           # của master lúc đang điều khiển, rời máy thì trả lại cài đặt của nó
 # ========================================================================
 
+import collections
 import ctypes
+import gc
 import itertools
+import json
 import os
 import queue
 import shutil
-import tempfile
 import socket
 import struct
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -90,6 +109,39 @@ class INPUT(ctypes.Structure):
     _fields_ = [("type", DWORD), ("u", _INPUTUNION)]
 
 
+# --- Raw Input: chuyển động gốc của chuột (chưa qua tốc độ/gia tốc của Windows) ---
+class RAWINPUTDEVICE(ctypes.Structure):
+    _fields_ = [("usUsagePage", WORD), ("usUsage", WORD), ("dwFlags", DWORD), ("hwndTarget", VOIDP)]
+
+
+class RAWINPUTHEADER(ctypes.Structure):
+    _fields_ = [("dwType", DWORD), ("dwSize", DWORD), ("hDevice", VOIDP), ("wParam", ULONG_PTR)]
+
+
+class _RAWBTN(ctypes.Structure):
+    _fields_ = [("usButtonFlags", WORD), ("usButtonData", WORD)]
+
+
+class _RAWBTNU(ctypes.Union):
+    _fields_ = [("ulButtons", DWORD), ("b", _RAWBTN)]
+
+
+class RAWMOUSE(ctypes.Structure):
+    _fields_ = [("usFlags", WORD), ("u", _RAWBTNU), ("ulRawButtons", DWORD),
+                ("lLastX", LONG), ("lLastY", LONG), ("ulExtraInformation", DWORD)]
+
+
+class _RAWDATA(ctypes.Union):
+    _fields_ = [("mouse", RAWMOUSE), ("pad", ctypes.c_ubyte * 64)]
+
+
+class RAWINPUT(ctypes.Structure):
+    _fields_ = [("header", RAWINPUTHEADER), ("data", _RAWDATA)]
+
+
+WM_INPUT, RID_INPUT, RIM_TYPEMOUSE, RIDEV_INPUTSINK, PM_REMOVE = 0x00FF, 0x10000003, 0, 0x00000100, 0x0001
+MOUSE_MOVE_ABSOLUTE = 0x01
+
 HOOKPROC = WINFUNCTYPE(LRESULT, ctypes.c_int, wt.WPARAM, wt.LPARAM)
 WNDPROC = WINFUNCTYPE(LRESULT, VOIDP, UINT, wt.WPARAM, wt.LPARAM)
 
@@ -113,15 +165,24 @@ BTN_FLAGS = {1: (0x0002, 0x0004, 0), 2: (0x0008, 0x0010, 0), 3: (0x0020, 0x0040,
              4: (0x0080, 0x0100, 1), 5: (0x0080, 0x0100, 2)}
 LLMHF_ANY_INJECTED = 0x01 | 0x02
 LLKHF_EXTENDED, LLKHF_ANY_INJECTED, LLKHF_UP = 0x01, 0x10 | 0x02, 0x80
-VK_SCROLL = 0x91
+VK_SCROLL, SM_SWAPBUTTON = 0x91, 23
 INPUT_MOUSE, INPUT_KEYBOARD = 0, 1
 MOUSEEVENTF_MOVE, MOUSEEVENTF_WHEEL, MOUSEEVENTF_HWHEEL = 0x0001, 0x0800, 0x1000
 KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP = 0x0001, 0x0002
 CF_DIB, CF_UNICODETEXT, CF_HDROP, GMEM_MOVEABLE = 8, 13, 15, 0x0002
-KEY_NAME = {0x13: "Pause/Break", 0x7B: "F12", 0x91: "Scroll Lock"}.get(FILE_KEY, f"phím 0x{FILE_KEY:02X}")
 HWND_MESSAGE, HWND_TOPMOST = VOIDP(-3), VOIDP(-1)
 WM_SETCURSOR, HIDER = 0x0020, 16   # HIDER: cỡ cửa sổ che con trỏ (pixel)
 INJECT_TAG = 0x4B564D  # "KVM"
+
+
+def key_name(vk):
+    names = {0x13: "Pause/Break", 0x91: "Scroll Lock", 0x2D: "Insert", 0x24: "Home", 0x23: "End", 0x21: "Page Up",
+             0x22: "Page Down"}
+    names.update({0x6F + i: f"F{i}" for i in range(1, 13)})   # 0x70 = F1 ... 0x7B = F12
+    return names.get(vk, f"phím 0x{vk:02X}")
+
+
+KEY_NAME = key_name(FILE_KEY)
 
 user32 = kernel32 = None
 if windll is not None:
@@ -141,6 +202,7 @@ if windll is not None:
     _sig(user32.GetKeyState, ctypes.c_short, ctypes.c_int)
     _sig(user32.GetAsyncKeyState, ctypes.c_short, ctypes.c_int)
     _sig(user32.GetSystemMetrics, ctypes.c_int, ctypes.c_int)
+    _sig(user32.MapVirtualKeyW, UINT, UINT, UINT)
     _sig(user32.EnumDisplayMonitors, BOOL, VOIDP, VOIDP, MONITORENUMPROC, wt.LPARAM)
     _sig(user32.OpenClipboard, BOOL, VOIDP)
     _sig(user32.CloseClipboard, BOOL)
@@ -156,6 +218,10 @@ if windll is not None:
     _sig(user32.RegisterClassW, WORD, ctypes.POINTER(WNDCLASSW))
     _sig(user32.DefWindowProcW, LRESULT, VOIDP, UINT, wt.WPARAM, wt.LPARAM)
     _sig(user32.DispatchMessageW, LRESULT, VOIDP)
+    _sig(user32.PeekMessageW, BOOL, VOIDP, VOIDP, UINT, UINT, UINT)
+    _sig(user32.RegisterRawInputDevices, BOOL, ctypes.POINTER(RAWINPUTDEVICE), UINT, UINT)
+    _sig(user32.GetRawInputData, UINT, VOIDP, UINT, VOIDP, ctypes.POINTER(UINT), UINT)
+    _sig(user32.SystemParametersInfoW, BOOL, UINT, UINT, VOIDP, UINT)
     _sig(user32.SetWindowPos, BOOL, VOIDP, VOIDP, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, UINT)
     _sig(user32.ShowWindowAsync, BOOL, VOIDP, ctypes.c_int)
     _sig(user32.SetLayeredWindowAttributes, BOOL, VOIDP, DWORD, ctypes.c_ubyte, DWORD)
@@ -178,7 +244,7 @@ if windll is not None:
 
 
 def win_setup():
-    """DPI-aware (tọa độ = pixel thật), ưu tiên CPU cao, tắt QuickEdit của console."""
+    """DPI-aware (tọa độ = pixel thật), ưu tiên CPU cao, tắt QuickEdit của console, sleep chính xác 1ms."""
     ok = 0
     try:
         user32.SetProcessDpiAwarenessContext.argtypes = [VOIDP]
@@ -203,7 +269,35 @@ def win_setup():
             kernel32.SetConsoleMode(h, (mode.value & ~0x0040) | 0x0080)
     except Exception:
         pass
+    try:  # time.sleep vài ms cho chính xác (mặc định Windows làm tròn ~15ms)
+        windll.winmm.timeBeginPeriod(1)
+    except Exception:
+        pass
+    try:  # Windows 10/11: cửa sổ kvm nằm dưới nền / bị thu nhỏ thì Windows hay cho chạy "tiết kiệm điện" (EcoQoS,
+        # nhân E) và bỏ qua timeBeginPeriod -> tắt cả 2 cho tiến trình này
+        st = POWER_THROTTLING(1, 0x1 | 0x4, 0)   # EXECUTION_SPEED | IGNORE_TIMER_RESOLUTION, StateMask 0 = không tiết kiệm
+        f = kernel32.SetProcessInformation
+        f.restype, f.argtypes = BOOL, [VOIDP, ctypes.c_int, ctypes.POINTER(POWER_THROTTLING), DWORD]
+        f(kernel32.GetCurrentProcess(), 4, ctypes.byref(st), ctypes.sizeof(st))   # 4 = ProcessPowerThrottling
+    except Exception:
+        pass
     sys.setswitchinterval(0.001)
+
+
+class POWER_THROTTLING(ctypes.Structure):
+    _fields_ = [("Version", DWORD), ("ControlMask", DWORD), ("StateMask", DWORD)]
+
+
+def boost_thread():
+    """Luồng xử lý chuột/phím: ưu tiên TIME_CRITICAL. Máy chạy nhiều giả lập (CPU 100%) thì luồng này vẫn được
+    chạy ngay, không phải xếp hàng sau giả lập."""
+    try:
+        f = kernel32.SetThreadPriority
+        f.restype, f.argtypes = BOOL, [VOIDP, ctypes.c_int]
+        kernel32.GetCurrentThread.restype = VOIDP
+        f(kernel32.GetCurrentThread(), 15)   # THREAD_PRIORITY_TIME_CRITICAL
+    except Exception:
+        pass
 
 
 def is_admin():
@@ -236,9 +330,54 @@ def cursor_pos():
     return p.x, p.y
 
 
+def led_on():
+    """Đèn Scroll Lock đang sáng?"""
+    return bool(user32.GetKeyState(VK_SCROLL) & 1)
+
+
+def btn_down(b):
+    """Nút chuột b (logic) có đang được giữ? GetAsyncKeyState đọc nút VẬT LÝ nên phải tính
+    trường hợp đã đổi nút trái/phải (chuột cho người thuận tay trái)."""
+    if b in (1, 2) and user32.GetSystemMetrics(SM_SWAPBUTTON):
+        b = 3 - b
+    return bool(user32.GetAsyncKeyState(BTN_VK[b]) & 0x8000)
+
+
+# ---------- cài đặt chuột của Windows: tốc độ con trỏ (1-20) + "Enhance pointer precision" ----------
+SPI_GETMOUSE, SPI_SETMOUSE, SPI_GETMOUSESPEED, SPI_SETMOUSESPEED = 0x0003, 0x0004, 0x0070, 0x0071
+MOUSE_SAVE = os.path.join(tempfile.gettempdir(), "MiniKVM_mouse.txt")   # cài đặt gốc của client (phòng tắt ngang)
+EXIT_HOOKS = []   # việc phải làm trước khi thoát (trả lại cài đặt chuột của client)
+
+
+def get_mouse():
+    """-> (tốc độ 1-20, ngưỡng 1, ngưỡng 2, gia tốc). "Enhance pointer precision" bật = gia tốc 1."""
+    sp, arr = ctypes.c_int(10), (ctypes.c_int * 3)(6, 10, 1)
+    user32.SystemParametersInfoW(SPI_GETMOUSESPEED, 0, ctypes.byref(sp), 0)
+    user32.SystemParametersInfoW(SPI_GETMOUSE, 0, arr, 0)
+    return (sp.value, arr[0], arr[1], arr[2])
+
+
+def set_mouse(m):
+    """Đặt TẠM (không lưu vào registry, khởi động lại máy là về như cũ)."""
+    speed, t1, t2, acc = m
+    if not (1 <= speed <= 20 and 0 <= acc <= 2):
+        return
+    user32.SystemParametersInfoW(SPI_SETMOUSE, 0, (ctypes.c_int * 3)(t1, t2, acc), 0)
+    user32.SystemParametersInfoW(SPI_SETMOUSESPEED, 0, VOIDP(speed), 0)   # SETMOUSESPEED: giá trị nằm ngay trong tham số
+
+
+def run_exit_hooks():
+    for fn in list(EXIT_HOOKS):
+        try:
+            fn()
+        except Exception:
+            pass
+
+
 # --------------------------------- Log ---------------------------------
 # Mọi print đi qua 1 thread riêng: hook chuột/phím không bao giờ bị chặn vì console.
 _logq = queue.SimpleQueue()
+GUI = False   # True khi chạy từ kvm_gui.py (tham số --gui): in thêm dòng trạng thái "@@KVM {json}" cho giao diện
 
 
 def log(msg):
@@ -249,12 +388,21 @@ def set_title(text):
     _logq.put((text,))
 
 
+def gui_event(d):
+    """Gửi trạng thái cho giao diện (chỉ khi chạy với --gui). Đi chung hàng đợi log nên đúng thứ tự."""
+    if GUI:
+        _logq.put(("ev", json.dumps(d)))
+
+
 def _log_loop():
+    boost_thread()
     while True:
         m = _logq.get()
         try:
             if isinstance(m, tuple):
-                if kernel32 is not None:
+                if len(m) == 2:
+                    print("@@KVM " + m[1], flush=True)
+                elif kernel32 is not None and not GUI:
                     kernel32.SetConsoleTitleW(m[0])
             else:
                 print(m, flush=True)
@@ -308,6 +456,18 @@ class Screen:
                 return True
         return False
 
+    def clamp(self, x, y):
+        """Điểm trên màn hình gần (x,y) nhất (tọa độ từ hook có thể vượt ra ngoài khi đẩy chuột sát mép)."""
+        best, bd = (x, y), -1
+        for l, t, r, b in self.geo[0]:
+            cx, cy = min(max(x, l), r - 1), min(max(y, t), b - 1)
+            d = (cx - x) * (cx - x) + (cy - y) * (cy - y)
+            if bd < 0 or d < bd:
+                best, bd = (cx, cy), d
+                if not d:
+                    break
+        return best
+
     def edges_at(self, x, y):
         """Con trỏ (x,y) đang nằm sát những cạnh nào (phía bên kia không còn màn hình)."""
         for l, t, r, b in self.geo[0]:
@@ -356,6 +516,7 @@ class Screen:
         return x, y
 
 
+
 # ------------------------------ Clipboard ------------------------------
 CLIP_FORMATS = (("text", CF_UNICODETEXT), ("html", "HTML Format"),
                 ("rtf", "Rich Text Format"), ("image", CF_DIB))
@@ -363,11 +524,11 @@ MAX_CLIP = MAX_CLIP_MB * 1024 * 1024
 
 
 def pack_clip(items):
-    out = bytearray()
+    parts = []   # ghép 1 lần (ảnh chụp màn hình vài chục MB: bớt copy -> bớt khựng chuột lúc chuyển máy)
     for name, data in items:
         nb = name.encode()
-        out += struct.pack("<B", len(nb)) + nb + struct.pack("<I", len(data)) + data
-    return bytes(out)
+        parts += (struct.pack("<B", len(nb)), nb, struct.pack("<I", len(data)), data)
+    return b"".join(parts)
 
 
 def unpack_clip(blob):
@@ -421,7 +582,7 @@ class Clipboard:
         self.ids = {n: (f if isinstance(f, int) else user32.RegisterClipboardFormatW(f))
                     for n, f in CLIP_FORMATS}
         self.ids["drop"] = user32.RegisterClipboardFormatW("Preferred DropEffect")
-        self.seq = user32.GetClipboardSequenceNumber()  # chỉ đồng bộ những gì copy SAU khi chạy
+        self.seq = user32.GetClipboardSequenceNumber()  # chỉ chuyển những gì copy SAU khi chạy
 
     def changed(self):
         return user32.GetClipboardSequenceNumber() != self.seq
@@ -508,6 +669,7 @@ class Clipboard:
         finally:
             self._close(hwnd)
 
+
 class Worker:
     """1 thread làm việc chậm (clipboard) để không bao giờ làm khựng chuột."""
 
@@ -519,6 +681,7 @@ class Worker:
         self.q.put((fn, args))
 
     def _run(self):
+        boost_thread()
         while True:
             fn, args = self.q.get()
             try:
@@ -530,15 +693,26 @@ class Worker:
 # ------------------------------ Giao thức ------------------------------
 # Mỗi gói: [kiểu 1 byte][độ dài 4 byte][nội dung]. TCP_NODELAY để không bị trễ.
 (T_WAKE, T_MOVE, T_BTN, T_WHEEL, T_KEY, T_ENTER, T_LEAVE, T_PING, T_PONG, T_EDGE, T_CLIP,
- T_OPT, T_FBEGIN, T_FENTRY, T_FDATA, T_FEND, T_FABORT, T_FILES) = range(18)
+ T_OPT, T_FBEGIN, T_FENTRY, T_FDATA, T_FEND, T_FABORT, T_FILES,
+ _T_SYNC, _T_SPOS, _T_SBTN, T_HELLO, T_RMOVE, T_MFEEL) = range(24)
+# 18-20 (_T_...) là gói ĐỒNG BỘ của bản 2 trong 1: giữ nguyên số thứ tự để vẫn hiểu nhau với máy chạy bản đó
 FILE_T = (T_FBEGIN, T_FENTRY, T_FDATA, T_FEND, T_FABORT)
+INPUT_T = (T_MOVE, T_BTN, T_WHEEL, T_KEY, T_RMOVE)   # gói phím/chuột
+MOVE_T = (T_MOVE, T_RMOVE)   # các kiểu di chuột: dồn nhiều gói thì gộp lại
+# T_RMOVE (chuyển động gốc) KHÔNG BAO GIỜ cộng dồn: Windows tính gia tốc chuột ("Enhance pointer precision") theo TỪNG
+# bước, gộp 3 bước nhỏ thành 1 bước to là Windows tưởng chuột vung nhanh -> tăng tốc quá đà, đi không giống master
 HDR = struct.Struct("<BI")
 FMT = {T_MOVE: struct.Struct("<ii"), T_BTN: struct.Struct("<BB"), T_WHEEL: struct.Struct("<hB"),
        T_KEY: struct.Struct("<HHB"), T_ENTER: struct.Struct("<Bf"), T_EDGE: struct.Struct("<Bf"),
-       T_OPT: struct.Struct("<B")}
+       T_OPT: struct.Struct("<B"),
+       T_HELLO: struct.Struct("<H"),      # client báo phiên bản khi vừa kết nối
+       T_RMOVE: struct.Struct("<ii"),     # CHUYỂN MÁY: chuyển động gốc của chuột (raw), client tự tính tốc độ
+       T_MFEEL: struct.Struct("<Biii")}   # CHUYỂN MÁY: cài đặt chuột của master (tốc độ, ngưỡng 1, ngưỡng 2, gia tốc)
+VERSION = 4           # cùng giao thức với bản 2 trong 1 (3 = chuyển động chuột gốc, 4 = chuột đi y như master)
 CHUNK = 64 * 1024     # clipboard lớn được cắt nhỏ, chen giữa các sự kiện chuột
 TIMEOUT = 5.0         # không nhận được gì trong 5s -> coi như mất kết nối
 PING_EVERY = 1.0      # master ping mỗi 1s (kể cả khi đang di chuột), client trả lời PONG
+SLOW_MS = 30          # độ trễ đi-về master <-> client từ mức này trở lên thì báo "phản hồi chậm"
 
 
 def encode(item):
@@ -558,6 +732,7 @@ class Link:
         self.q = queue.SimpleQueue()
         self.stream, self.ftid = None, None   # luồng gửi chậm (clipboard/file), chen giữa sự kiện chuột
         self.recv = FileRecv()
+        self.pings = collections.deque(maxlen=8)   # lúc gửi từng PING -> PONG về thì tính độ trễ đi-về
         self.alive = True
         self._lock = threading.Lock()
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -574,8 +749,9 @@ class Link:
 
     def send_clip(self, blob):
         n = max(1, (len(blob) + CHUNK - 1) // CHUNK)
-        self._stream(iter([frame(T_CLIP, bytes([(1 if i == 0 else 0) | (2 if i == n - 1 else 0)])
-                                 + blob[i * CHUNK:(i + 1) * CHUNK]) for i in range(n)]))
+        # cắt từng đoạn NGAY LÚC GỬI (không cắt hết 1 lần): ảnh lớn không làm khựng chuột lúc vừa chuyển máy
+        self._stream(frame(T_CLIP, bytes([(1 if i == 0 else 0) | (2 if i == n - 1 else 0)])
+                           + blob[i * CHUNK:(i + 1) * CHUNK]) for i in range(n))
 
     def send_files(self, entries, total):
         tid = next(_tids)
@@ -606,6 +782,7 @@ class Link:
             log("[LỖI] " + traceback.format_exc())
 
     def _writer(self):
+        boost_thread()
         q, next_ping = self.q, 0.0
         try:
             while self.alive:
@@ -613,18 +790,15 @@ class Link:
                     item = q.get_nowait() if self.stream is not None else q.get(timeout=PING_EVERY)
                 except queue.Empty:
                     item = None
-                buf, mx, my, mv, n = bytearray(), 0, 0, False, 0
+                buf, pend, n = bytearray(), None, 0   # pend: bước di chuột (T_MOVE) đang gộp
                 while item is not None:
                     t = item[0]
-                    if t == T_MOVE:          # gộp nhiều bước di chuột thành 1 gói
-                        mx += item[1]
-                        my += item[2]
-                        mv = True
+                    if t == T_MOVE:   # cộng dồn pixel
+                        pend = item if pend is None else (t, pend[1] + item[1], pend[2] + item[2])
                     elif t != T_WAKE:
-                        if mv:
-                            buf += encode((T_MOVE, mx, my))
-                            mx = my = 0
-                            mv = False
+                        if pend is not None:   # giữ đúng thứ tự: di chuột tới nơi rồi mới click/gõ phím
+                            buf += encode(pend)
+                            pend = None
                         buf += encode(item)
                     n += 1
                     if n >= 500:
@@ -633,8 +807,8 @@ class Link:
                         item = q.get_nowait()
                     except queue.Empty:
                         item = None
-                if mv:
-                    buf += encode((T_MOVE, mx, my))
+                if pend is not None:
+                    buf += encode(pend)
                 st = self.stream
                 if st is not None and q.empty():
                     try:
@@ -645,11 +819,12 @@ class Link:
                     except Exception:
                         log("[LỖI gửi] " + traceback.format_exc())
                         self.stream, self.ftid = None, None
-                if self.ping:   # ping theo đồng hồ, KHÔNG chờ rảnh (lỗi cũ: di chuột liên tục 5s -> mất kết nối)
+                if self.ping:   # ping theo đồng hồ, KHÔNG chờ rảnh (di chuột liên tục cũng không mất kết nối)
                     now = time.monotonic()
                     if now >= next_ping:
                         buf += PING_BYTES
                         next_ping = now + PING_EVERY
+                        self.pings.append(now)
                 if buf and self.alive:
                     self.sock.sendall(buf)
         except OSError:
@@ -658,6 +833,7 @@ class Link:
             self.close()
 
     def _reader(self):
+        boost_thread()
         buf, clip = bytearray(), None
         try:
             while self.alive:
@@ -665,7 +841,7 @@ class Link:
                 if not data:
                     break
                 buf += data
-                pos, end_all = 0, len(buf)
+                pos, end_all, mv = 0, len(buf), None
                 while end_all - pos >= 5:
                     t, n = HDR.unpack_from(buf, pos)
                     if n > CHUNK + 4096:
@@ -675,6 +851,24 @@ class Link:
                         break
                     body = bytes(buf[pos + 5:end])
                     pos = end
+                    if t in MOVE_T:
+                        # nhiều bước di chuột đến dồn -> xử lý 1 lần: T_MOVE cộng dồn,
+                        # T_RMOVE gom thành danh sách (đưa vào Windows 1 lần nhưng vẫn TỪNG bước riêng)
+                        a = FMT[t].unpack(body)
+                        if t == T_RMOVE:
+                            a = (a,)
+                        if mv is not None and mv[0] == t:
+                            if t == T_MOVE:
+                                a = (mv[1][0] + a[0], mv[1][1] + a[1])
+                            elif t == T_RMOVE:
+                                a = mv[1] + a
+                        elif mv is not None:
+                            self._dispatch(*mv)
+                        mv = (t, a)
+                        continue
+                    if mv is not None:   # giữ đúng thứ tự: di chuột tới nơi rồi mới click/gõ phím
+                        self._dispatch(*mv)
+                        mv = None
                     if t == T_CLIP:
                         flags = body[0] if body else 0
                         if flags & 1:
@@ -694,6 +888,8 @@ class Link:
                     else:
                         s = FMT.get(t)
                         self._dispatch(t, s.unpack(body) if s else ())
+                if mv is not None:
+                    self._dispatch(*mv)
                 if pos:
                     del buf[:pos]
         except (OSError, ValueError, struct.error):
@@ -853,8 +1049,12 @@ class Peer:
     def __init__(self, ip, cell, label):
         self.ip, self.cell, self.label = ip, cell, label
         self.link = None
+        self.ok = self.checked = False   # ok = client đã báo phiên bản (T_HELLO)
+        self.ver = 0                     # phiên bản kvm trên client (0 = bản rất cũ, không gửi HELLO)
         self.clip_ver = 0
-        self.warn_t = 0.0
+        self.warn_t = self.slow_t = 0.0
+        self.rtt = None                  # độ trễ đi-về gần nhất (ms): master -> client -> master
+        self.rtts = collections.deque(maxlen=10)   # 10 lần đo gần nhất (~10 giây)
 
 
 class Master:
@@ -872,10 +1072,11 @@ class Master:
                 if v and v != "MASTER":
                     d = [i for i, s in enumerate(STEP) if (self.home[0] + s[0], self.home[1] + s[1]) == (r, c)]
                     self.peers[v] = Peer(v, (r, c), DIR_NAME[d[0]] if d else f"ô[{r}][{c}]")
+        self.peer_list = tuple(self.peers.values())
         self.cell, self.active = self.home, None       # active = None nghĩa là đang ở MASTER
         self.lock = threading.RLock()
         self.screen = Screen()
-        self.scroll = bool(user32.GetKeyState(VK_SCROLL) & 1)
+        self.locked = led_on()                         # đèn Scroll Lock sáng = KHÓA chuột ở máy đang dùng
         self.scroll_held = False
         self.buttons, self.local_down = set(), set()
         self.px, self.py = cursor_pos()
@@ -885,6 +1086,89 @@ class Master:
         cleanup_temp(0)
         self.running, self.hook_tid = True, 0
         self._hider = self._blank = None
+        # chuyển động chuột gốc (raw): None = chưa biết (thử), True = đang dùng, False = dùng cách cũ
+        self.raw = None if RAW_MOUSE else False
+        self.raw_wait = [0, 0, 0]   # bước di chuột hook thấy mà chưa có raw tương ứng: dx, dy, số lần
+        self.raw_skip = False       # vừa từ master sang client: bỏ WM_INPUT của chính bước chạm mép (thuộc master)
+        self._raw_hwnd, self._raw_buf = None, RAWINPUT()
+
+    # ---------- chuyển động chuột gốc (raw input) ----------
+    def _make_raw(self):
+        """Cửa sổ ẩn nhận WM_INPUT (chuyển động gốc của chuột, kể cả khi kvm nằm dưới nền).
+        Phải tạo trong thread có vòng lặp message (thread hook)."""
+        hinst = kernel32.GetModuleHandleW(None)
+
+        def wndproc(hwnd, msg, wp, lp):
+            if msg == WM_INPUT:
+                try:
+                    self._on_raw(lp)
+                except Exception:
+                    log("[LỖI raw] " + traceback.format_exc())
+            return user32.DefWindowProcW(hwnd, msg, wp, lp)
+
+        self._rawproc = WNDPROC(wndproc)
+        wc = WNDCLASSW(lpfnWndProc=self._rawproc, hInstance=hinst, lpszClassName="MiniKVMRaw")
+        user32.RegisterClassW(ctypes.byref(wc))
+        hwnd = user32.CreateWindowExW(0, "MiniKVMRaw", None, 0, 0, 0, 0, 0, HWND_MESSAGE, None, hinst, None)
+        rid = RAWINPUTDEVICE(1, 2, RIDEV_INPUTSINK, hwnd)   # usage page 1 / usage 2 = chuột
+        if hwnd and user32.RegisterRawInputDevices(ctypes.byref(rid), 1, ctypes.sizeof(rid)):
+            self._raw_hwnd = hwnd
+        else:
+            self.raw = False
+            log("[CHUỘT] Không đăng ký được chuyển động chuột gốc -> chuyển máy dùng cách cũ")
+
+    def _use_raw(self, act):
+        """Gửi chuyển động gốc cho máy này? (client bản >= 3 mới hiểu)"""
+        return self.raw is not False and act.ver >= 3
+
+    def _on_raw(self, lp):
+        act = self.active
+        if act is None or self.raw_skip or not self._use_raw(act):
+            return
+        ri = self._raw_buf
+        sz = UINT(ctypes.sizeof(ri))
+        n = user32.GetRawInputData(lp, RID_INPUT, ctypes.byref(ri), ctypes.byref(sz), ctypes.sizeof(RAWINPUTHEADER))
+        if n == 0xFFFFFFFF or n < ctypes.sizeof(RAWINPUTHEADER) or ri.header.dwType != RIM_TYPEMOUSE:
+            return
+        m = ri.data.mouse
+        if m.usFlags & MOUSE_MOVE_ABSOLUTE:
+            self._raw_off("chuột báo tọa độ tuyệt đối (bút vẽ, máy ảo, Remote Desktop...)")
+            return
+        self.raw_wait = [0, 0, 0]
+        if self.raw is None:
+            self.raw = True
+            log("[CHUỘT] Dùng chuyển động chuột gốc: máy kia tự tính tốc độ như chuột cắm thẳng vào nó")
+        if (m.lLastX or m.lLastY) and act.link:
+            act.link.send((T_RMOVE, m.lLastX, m.lLastY))
+
+    def _wait_raw(self, dx, dy):
+        """Hook thấy chuột di; chuyển động gốc (WM_INPUT) sẽ tới ngay sau. Không tới -> raw không dùng được."""
+        self.raw_skip = False
+        w = self.raw_wait
+        w[0] += dx
+        w[1] += dy
+        w[2] += 1
+        if w[2] >= (300 if self.raw else 30):
+            self._raw_off("không nhận được chuyển động chuột gốc")
+
+    def _raw_off(self, why):
+        self.raw = False
+        log(f"[CHUỘT] {why} -> chuyển máy dùng cách cũ")
+        act, w = self.active, self.raw_wait
+        if act is not None and act.link and (w[0] or w[1]):
+            act.link.send((T_MOVE, w[0], w[1]))   # phần đã di mà chưa gửi -> gửi bù, không mất bước nào
+        self.raw_wait = [0, 0, 0]
+
+    def _flush_raw(self):
+        """Trước khi gửi click/cuộn: lấy nốt các WM_INPUT còn trong hàng đợi gửi trước -> click đúng chỗ."""
+        if not self._raw_hwnd:
+            return
+        msg = wt.MSG()
+        for _ in range(256):
+            if not user32.PeekMessageW(ctypes.byref(msg), self._raw_hwnd, WM_INPUT, WM_INPUT, PM_REMOVE):
+                break
+            self._on_raw(msg.lParam)
+            user32.DefWindowProcW(msg.hWnd, msg.message, msg.wParam, msg.lParam)
 
     # ---------- chuyển máy ----------
     def neighbor(self, cell, d):
@@ -896,7 +1180,7 @@ class Master:
     def try_switch(self, d, frac, src=None):
         """Chuyển sang máy ở hướng d. src = máy client báo chạm cạnh (None = master)."""
         with self.lock:
-            if self.scroll or self.buttons or src is not self.active:
+            if self.locked or self.buttons or src is not self.active:
                 return False
             name = self.neighbor(self.cell, d)
             if not name:
@@ -914,25 +1198,37 @@ class Master:
             return True
 
     def _switch(self, target, side, frac):
+        """side = None: về master, con trỏ hiện ở giữa màn hình chính."""
         old = self.active
         if old is not None and old.link:
             old.link.send((T_LEAVE,))
+        if target is not None:   # gửi ENTER TRƯỚC khi đổi active -> máy mới không nhận phím/chuột trước ENTER
+            target.link.send((T_ENTER, side, frac))
+            if MOUSE_LIKE_MASTER and target.ver >= 4 and self._use_raw(target):
+                try:   # máy kia dùng tạm tốc độ chuột của master -> chuột đi y như ở master
+                    target.link.send((T_MFEEL,) + get_mouse())
+                except Exception:
+                    log("[LỖI] " + traceback.format_exc())
         self.active = target
+        self.raw_wait = [0, 0, 0]
+        self.raw_skip = old is None and target is not None
         if target is None:
             self.cell = self.home
-            x, y = self.screen.entry(side, frac)
+            x, y = self.screen.park if side is None else self.screen.entry(side, frac)
             self._show_cursor()
             user32.SetCursorPos(x, y)
             self.px, self.py = x, y
             log("<< Về MASTER")
         else:
             self.cell = target.cell
-            target.link.send((T_ENTER, side, frac))
             if old is None:  # rời master: đỗ + ẩn con trỏ giữa màn hình, lấy clipboard master nếu mới copy
                 self._hide_cursor()
                 self.worker.submit(self._grab_local_clip)
             self.worker.submit(self._push_clip, target)
-            log(f">> Điều khiển {target.ip} ({target.label})")
+            rt = list(target.rtts)
+            log(f">> Điều khiển {target.ip} ({target.label})" + (
+                f" | độ trễ {rt[-1]:.0f} ms, 10 giây qua cao nhất {max(rt):.0f} ms (dây LAN thường 1-3 ms)"
+                if rt else ""))
         self._title()
 
     # ---------- ẩn con trỏ master (cách Deskflow làm) ----------
@@ -973,28 +1269,27 @@ class Master:
         if self._hider:
             user32.ShowWindowAsync(self._hider, 0)   # SW_HIDE, không chặn thread nào
 
+    # ---------- trạng thái / log ----------
     def _title(self):
         where = self.active.ip if self.active else "MASTER"
-        set_title(f"MiniKVM MASTER | Scroll Lock: {'BẬT (khóa)' if self.scroll else 'TẮT'} | "
+        set_title(f"MiniKVM MASTER | Scroll Lock: {'BẬT (khóa chuột)' if self.locked else 'TẮT'} | "
                   f"Copy file: {'BẬT' if self.file_mode else 'TẮT'} | Đang ở: {where}")
+        if GUI:   # ảnh chụp trạng thái cho giao diện: máy đang điều khiển, từng máy đã kết nối chưa
+            act = self.active
+            gui_event({"ev": "master", "sync": False, "file": self.file_mode, "locked": self.locked,
+                       "active": act.ip if act else None,
+                       "peers": [{"ip": p.ip, "sync": False,
+                                  "st": "off" if p.link is None else "ok" if p.ok else "old" if p.checked else "wait",
+                                  "rtt": None if p.link is None or p.rtt is None else round(p.rtt)}
+                                 for p in self.peer_list]})
 
-    def _log_scroll(self):
-        if self.scroll:
+    def _log_lock(self, why=""):
+        why = f" ({why})" if why else ""
+        if self.locked:
             where = self.active.ip if self.active else "MASTER"
-            log(f"[SCROLL LOCK] BẬT  -> khóa chuột tại {where}, KHÔNG chuyển máy")
+            log(f"[SCROLL LOCK] BẬT  -> khóa chuột tại {where}, KHÔNG chuyển máy{why}")
         else:
-            log("[SCROLL LOCK] TẮT  -> có thể di chuyển chuột qua các PC")
-        self._title()
-
-    def set_file_mode(self, on):
-        self.file_mode = on
-        self._log_file()
-        for p in list(self.peers.values()):
-            link = p.link
-            if link:
-                link.send((T_OPT, on))
-                if not on:
-                    link.cancel_files()   # tắt giữa chừng -> hủy luôn file đang gửi
+            log(f"[SCROLL LOCK] TẮT  -> có thể di chuyển chuột qua các PC{why}")
         self._title()
 
     def _log_file(self):
@@ -1002,6 +1297,24 @@ class Master:
             log(f"[COPY FILE] BẬT  -> Ctrl+C file/thư mục ở 1 máy, sang máy khác Ctrl+V (bấm {KEY_NAME} để tắt)")
         else:
             log(f"[COPY FILE] TẮT  -> chỉ copy chữ/ảnh (bấm {KEY_NAME} để bật copy file)")
+
+    def set_lock(self, on, why=""):
+        with self.lock:
+            if on == self.locked:
+                return
+            self.locked = on
+        self._log_lock(why)
+
+    def set_file_mode(self, on):
+        self.file_mode = on
+        self._log_file()
+        for p in self.peer_list:
+            link = p.link
+            if link:
+                link.send((T_OPT, on))
+                if not on:
+                    link.cancel_files()   # tắt giữa chừng -> hủy luôn file đang gửi
+        self._title()
 
     # ---------- hook chuột ----------
     def _mouse_proc(self, code, wp, lp):
@@ -1019,13 +1332,14 @@ class Master:
         act = self.active
         link = act.link if act is not None else None
         if msg == WM_MOUSEMOVE:
-            x, y = m.pt.x, m.pt.y
+            rx, ry = m.pt.x, m.pt.y
             if act is None:
-                if not self.scroll:
+                x, y = self.screen.clamp(rx, ry)
+                if not self.locked:
                     if self.buttons:  # bỏ nút "kẹt" (lỡ mất sự kiện nhả)
-                        self.buttons = {b for b in self.buttons if user32.GetAsyncKeyState(BTN_VK[b]) & 0x8000}
+                        self.buttons = {b for b in self.buttons if btn_down(b)}
                     dirs = () if self.buttons else self.screen.edges_at(x, y)
-                    if len(dirs) > 1 and abs(y - self.py) > abs(x - self.px):
+                    if len(dirs) > 1 and abs(ry - self.py) > abs(rx - self.px):
                         dirs = sorted(dirs, key=lambda d: d < UP)
                     for d in dirs:
                         if self.try_switch(d, self.screen.frac(d, x, y)):
@@ -1033,8 +1347,11 @@ class Master:
                 self.px, self.py = x, y
                 return False
             cx, cy = cursor_pos()           # con trỏ master đứng yên -> độ lệch = bước di chuột
-            if link and (x != cx or y != cy):
-                link.send((T_MOVE, x - cx, y - cy))
+            dx, dy = rx - cx, ry - cy
+            if self._use_raw(act):          # chuyển động gốc đi qua WM_INPUT (_on_raw); ở đây chỉ canh raw có tới
+                self._wait_raw(dx, dy)
+            elif link and (dx or dy):
+                link.send((T_MOVE, dx, dy))
             return True
         if msg in BTN_MSG:
             b, down = BTN_MSG[msg]
@@ -1047,6 +1364,8 @@ class Master:
             if act is None:
                 return False
             if link:
+                if self._use_raw(act):
+                    self._flush_raw()       # bước di chuột gốc còn chờ -> gửi trước, click mới đúng chỗ
                 link.send((T_BTN, b, down))
             return True
         if msg in (WM_MOUSEWHEEL, WM_MOUSEHWHEEL):
@@ -1054,6 +1373,8 @@ class Master:
                 return False
             delta = (m.mouseData >> 16) & 0xFFFF
             if link:
+                if self._use_raw(act):
+                    self._flush_raw()
                 link.send((T_WHEEL, delta - 0x10000 if delta >= 0x8000 else delta, msg == WM_MOUSEHWHEEL))
             return True
         return act is not None
@@ -1077,12 +1398,12 @@ class Master:
                 self.set_file_mode(not self.file_mode)
             self.file_held = not up
             return True
-        if vk == VK_SCROLL:   # luôn để Windows xử lý để đèn Scroll Lock đổi theo
+        if vk == VK_SCROLL:   # khóa/mở khóa chuột; luôn để Windows xử lý để đèn Scroll Lock đổi theo
             if not up and not self.scroll_held:
-                self.scroll = not self.scroll
-                self._log_scroll()
+                self.set_lock(not self.locked)
             self.scroll_held = not up
             return False
+        ext = bool(k.flags & LLKHF_EXTENDED)
         act = self.active
         if act is None:
             if up:
@@ -1095,14 +1416,16 @@ class Master:
             return False
         link = act.link
         if link:
-            link.send((T_KEY, vk, k.scanCode & 0xFFFF,
-                       (1 if up else 0) | (2 if k.flags & LLKHF_EXTENDED else 0)))
+            link.send((T_KEY, vk, k.scanCode & 0xFFFF, (1 if up else 0) | (2 if ext else 0)))
         return True
 
     def _hook_loop(self):
+        boost_thread()   # hook chậm = chuột của CẢ máy master bị chậm theo
         self.hook_tid = kernel32.GetCurrentThreadId()
         if HIDE_MASTER_CURSOR:
             self._make_hider()   # cửa sổ phải thuộc thread có vòng lặp message (thread này)
+        if self.raw is not False:
+            self._make_raw()
         self._mproc, self._kproc = HOOKPROC(self._mouse_proc), HOOKPROC(self._kbd_proc)
         hmod = kernel32.GetModuleHandleW(None)
         hm = user32.SetWindowsHookExW(WH_MOUSE_LL, self._mproc, hmod, 0)
@@ -1115,6 +1438,31 @@ class Master:
             user32.DispatchMessageW(ctypes.byref(msg))
         user32.UnhookWindowsHookEx(hm)
         user32.UnhookWindowsHookEx(hk)
+
+    def _watch_loop(self):
+        """Luồng phụ, 10 lần/giây - đèn Scroll Lock là chuẩn: trạng thái khóa lệch đèn quá 1 giây thì theo đèn
+        (bấm Scroll Lock lúc đang ở màn hình UAC, Ctrl+Alt+Del, màn hình khóa, cửa sổ quyền admin... thì hook không
+        thấy). Chỉ làm khi đã thấy đèn đổi ít nhất 1 lần (chứng tỏ đọc được đèn thật), để không bao giờ
+        "bấm xong 1 giây tự đổi lại"."""
+        boost_thread()
+        led_seen, live, bad_t = led_on(), False, None
+        while self.running:
+            time.sleep(0.1)
+            try:
+                now, led = time.monotonic(), led_on()
+                if led != led_seen:
+                    led_seen, live = led, True
+                if live and led != self.locked:
+                    if bad_t is None:
+                        bad_t = now
+                    elif now - bad_t >= 1.0:
+                        bad_t = None
+                        self.set_lock(led, "khớp theo đèn Scroll Lock")
+                else:
+                    bad_t = None
+            except Exception:
+                log("[LỖI] " + traceback.format_exc())
+                time.sleep(1.0)
 
     # ---------- clipboard ----------
     def _grab_local_clip(self):
@@ -1178,19 +1526,48 @@ class Master:
             self._recv_clip(peer, a)
         elif t == T_FILES:
             self._recv_files(peer, a)
+        elif t == T_HELLO:
+            with self.lock:
+                peer.ver, peer.ok = a[0], True
+            if peer.ver < VERSION:
+                log(f"[!] {peer.ip} chạy kvm bản cũ ({peer.ver}) -> vẫn dùng được, nhưng chép file mới sang "
+                    "máy đó để chuột mượt hơn")
+            self._title()
+        elif t == T_PONG:
+            if link.pings:
+                self._rtt(peer, (time.monotonic() - link.pings.popleft()) * 1000)
+            if not peer.checked:
+                peer.checked = True
+                if not peer.ok:
+                    log(f"[!] {peer.ip} đang chạy MiniKVM bản rất cũ -> vẫn chuyển máy được, nhưng nên chép file "
+                        "này sang máy đó rồi chạy lại")
+                    self._title()
+
+    def _rtt(self, peer, ms):
+        """Đo độ trễ mỗi giây (PING -> PONG). Chậm thì báo: biết ngay máy nào quá tải / mạng chậm."""
+        peer.rtt = ms
+        peer.rtts.append(ms)
+        now = time.monotonic()
+        if ms >= SLOW_MS and now - peer.slow_t >= 10:
+            peer.slow_t = now
+            log(f"[!] {peer.ip} phản hồi chậm {ms:.0f} ms (bình thường dưới 5 ms) -> máy đó đang quá tải "
+                "(CPU/RAM) hoặc mạng chậm (Wi-Fi)")
+            self._title()
 
     def _peer_lost(self, peer):
         with self.lock:
-            peer.link = None
+            peer.link, peer.ok, peer.rtt = None, False, None
+            peer.rtts.clear()
             if self.active is peer:
                 self.active, self.cell = None, self.home
                 self._show_cursor()
                 user32.SetCursorPos(*self.screen.park)
                 self.px, self.py = self.screen.park
                 log(f"<< Mất kết nối {peer.ip} -> quay về MASTER")
-                self._title()
+            self._title()
 
     def _peer_loop(self, peer):
+        boost_thread()
         fails = 0
         while self.running:
             try:
@@ -1207,27 +1584,33 @@ class Master:
             link.peer = peer
             with self.lock:
                 peer.clip_ver, peer.link = 0, link
+                peer.ok = peer.checked = False
+                peer.ver = 0
             link.start()
             link.send((T_OPT, self.file_mode))
             log(f"[OK] Đã kết nối {peer.ip} ({peer.label})")
+            self._title()
             done.wait()
             self._peer_lost(peer)
             log(f"[X] Mất kết nối {peer.ip} - đang thử kết nối lại...")
             time.sleep(1.0)
 
     def run(self):
-        log("=== MiniKVM MASTER ===")
-        for p in self.peers.values():
+        log(f"=== MiniKVM MASTER - chuyển máy (bản {VERSION}) ===")
+        for p in self.peer_list:
             log(f"    {p.label:>6}: {p.ip}")
-        self._log_scroll()
+        self._log_lock()
         self._log_file()
         threading.Thread(target=self._hook_loop, name="hook", daemon=True).start()
-        for p in self.peers.values():
+        threading.Thread(target=self._watch_loop, name="watch", daemon=True).start()
+        for p in self.peer_list:
             threading.Thread(target=self._peer_loop, args=(p,), name="peer-" + p.ip, daemon=True).start()
         try:
             while self.running:
                 time.sleep(3.0)
                 self.screen.refresh()   # cắm/rút màn hình, đổi độ phân giải
+                if GUI:
+                    self._title()   # giao diện cập nhật độ trễ từng máy
         except KeyboardInterrupt:
             pass
         finally:
@@ -1246,10 +1629,98 @@ class Client:
         self.screen = Screen()
         self.keys, self.btns = set(), set()   # phím/nút đang giữ (để nhả hết khi rời máy)
         self.clip, self.worker = Clipboard(), Worker()
-        self.edge_t = 0.0
+        self.edge_t = self.slow_t = 0.0
         self.file_mode = False   # master bật/tắt bằng phím (mặc định TẮT)
+        self.entered = False     # CHUYỂN MÁY: chuột đang ở máy này (giữa ENTER và LEAVE)
+        self.poke_ev = threading.Event()
+        threading.Thread(target=self._poke_loop, name="poke", daemon=True).start()
+        self.my_mouse, self.mlock, self.mfeel_logged = None, threading.Lock(), False   # cài đặt chuột gốc của máy này
+        EXIT_HOOKS.append(self.mouse_restore)
+        self._recover_mouse()
         cleanup_temp(0)
 
+    # ---------- chuột đi y như master: dùng tạm cài đặt chuột của master lúc đang điều khiển máy này ----------
+    def mouse_like(self, m):
+        if not self.entered:
+            return
+        with self.mlock:
+            try:
+                cur = get_mouse()
+                if self.my_mouse is None:   # lưu cài đặt của máy này (cả ra file, phòng kvm bị tắt ngang)
+                    self.my_mouse = cur
+                    try:
+                        with open(MOUSE_SAVE, "w") as f:
+                            f.write(" ".join(map(str, cur)))
+                    except OSError:
+                        pass
+                if cur != tuple(m):
+                    set_mouse(m)
+                    if not self.mfeel_logged:
+                        self.mfeel_logged = True
+                        log(f"[CHUỘT] Lúc điều khiển máy này: dùng tạm tốc độ chuột của master ({m[0]}/20, Enhance "
+                            f"pointer precision {'BẬT' if m[3] else 'TẮT'}). Chuột rời đi là trả lại cài đặt của máy "
+                            f"này ({cur[0]}/20, {'BẬT' if cur[3] else 'TẮT'})")
+            except Exception:
+                log("[LỖI] " + traceback.format_exc())
+
+    def mouse_restore(self):
+        """Trả lại cài đặt chuột của máy này (chuột rời đi / mất kết nối / thoát)."""
+        with self.mlock:
+            if self.my_mouse is None:
+                return
+            m, self.my_mouse = self.my_mouse, None
+            try:
+                if get_mouse() != m:
+                    set_mouse(m)
+            except Exception:
+                pass
+            try:
+                os.remove(MOUSE_SAVE)
+            except OSError:
+                pass
+
+    def _recover_mouse(self):
+        """Lần trước kvm bị tắt ngang lúc đang dùng tạm cài đặt của master -> trả lại cài đặt của máy này."""
+        if not os.path.exists(MOUSE_SAVE):
+            return
+        try:
+            with open(MOUSE_SAVE) as f:
+                m = tuple(int(v) for v in f.read().split())
+            if len(m) == 4:
+                set_mouse(m)
+                log("[CHUỘT] Lần trước kvm bị tắt ngang -> đã trả lại tốc độ chuột của máy này")
+        except (OSError, ValueError):
+            pass
+        try:
+            os.remove(MOUSE_SAVE)
+        except OSError:
+            pass
+
+    def _poke_loop(self):
+        """Luồng riêng báo Windows "có thao tác chuột": không tắt màn hình, hiện lại con trỏ bị ẩn lúc gõ phím.
+        Tối đa 4 lần/giây. Để riêng vì lệnh này phải đi qua hook của mọi phần mềm khác trên máy (MuMu, phần mềm
+        chuột, anti-cheat...): máy nhiều giả lập có thể mất vài chục ms/lần -> không bắt luồng nhận chuột phải chờ."""
+        boost_thread()
+        while True:
+            self.poke_ev.wait()
+            self.poke_ev.clear()
+            t0 = time.perf_counter()
+            send_inputs(mouse_input(MOUSEEVENTF_MOVE))
+            self._check_slow(t0, "SendInput")
+            time.sleep(0.25)
+
+    def _check_slow(self, t0, call):
+        """Đo riêng từng lệnh Windows: lệnh nào chậm thì báo đúng lệnh đó (10 giây tối đa 1 lần)."""
+        ms = (time.perf_counter() - t0) * 1000
+        if ms >= SLOW_MS:
+            now = time.monotonic()
+            if now - self.slow_t >= 10:
+                self.slow_t = now
+                why = ("có phần mềm khác đang móc vào chuột/bàn phím (giả lập, phần mềm chuột/RGB, anti-cheat, "
+                       "macro...) hoặc máy quá tải") if call == "SendInput" else "máy quá tải (card màn hình/CPU)"
+                log(f"[!] Windows máy này mất {ms:.0f} ms cho 1 lệnh {call} (bình thường dưới 1 ms) -> {why}")
+
+    # ---------- CHUYỂN MÁY: bước di chuột tương đối, chạm cạnh thì báo master ----------
     def move(self, link, dx, dy):
         x, y = cursor_pos()
         nx, ny = x + dx, y + dy
@@ -1259,18 +1730,53 @@ class Client:
                 self.edge_t = now
                 for d in self.screen.exit_dirs(x, y, nx, ny):
                     link.send((T_EDGE, d, self.screen.frac(d, x, y)))
-        user32.SetCursorPos(nx, ny)             # đặt đúng pixel, không bị tăng tốc 2 lần
-        send_inputs(mouse_input(MOUSEEVENTF_MOVE))  # báo Windows có thao tác (không tắt màn hình)
+        t0 = time.perf_counter()
+        user32.SetCursorPos(nx, ny)             # đặt đúng pixel, không bị tăng tốc 2 lần, không qua hook của ai
+        self._check_slow(t0, "SetCursorPos")
+        self.poke_ev.set()
 
+    def rmove(self, link, moves):
+        """CHUYỂN MÁY, chuyển động gốc (raw) của chuột master: đưa vào Windows máy này như chuột cắm thẳng vào nó
+        -> Windows tự áp tốc độ chuột, gia tốc, scale màn hình của máy này: mượt y như chuột thật.
+        moves = các bước đến cùng lúc: đưa vào Windows trong 1 lệnh nhưng vẫn TỪNG bước riêng (không cộng dồn)."""
+        if len(moves) > 8:   # dồn quá nhiều (Windows máy này chậm): gộp bớt còn <= 8 bước, không để trễ dồn thêm
+            k = (len(moves) + 7) // 8
+            moves = [(sum(m[0] for m in moves[i:i + k]), sum(m[1] for m in moves[i:i + k]))
+                     for i in range(0, len(moves), k)]
+        dx, dy = sum(m[0] for m in moves), sum(m[1] for m in moves)
+        x, y = cursor_pos()
+        c = self.screen.contains   # đang nằm sát mép mà vẫn đẩy ra ngoài -> báo master chuyển máy
+        out = [d for d, push in ((LEFT, dx < 0 and not c(x - 1, y)), (RIGHT, dx > 0 and not c(x + 1, y)),
+                                 (UP, dy < 0 and not c(x, y - 1)), (DOWN, dy > 0 and not c(x, y + 1))) if push]
+        if out:
+            now = time.monotonic()
+            if now - self.edge_t > 0.03:
+                self.edge_t = now
+                if abs(dy) > abs(dx):
+                    out.sort(key=lambda d: d < UP)   # đẩy dọc nhiều hơn -> ưu tiên trên/dưới
+                for d in out:
+                    link.send((T_EDGE, d, self.screen.frac(d, x, y)))
+        items = [mouse_input(MOUSEEVENTF_MOVE, 0, mx, my) for mx, my in moves]
+        t0 = time.perf_counter()
+        send_inputs(*items)
+        self._check_slow(t0, "SendInput")
+
+    # ---------- dùng chung ----------
     def button(self, b, down):
         f = BTN_FLAGS.get(b)
         if f:
+            t0 = time.perf_counter()
             send_inputs(mouse_input(f[0] if down else f[1], f[2]))
+            self._check_slow(t0, "SendInput")
             (self.btns.add if down else self.btns.discard)(b)
 
     def key(self, vk, scan, fl):
         up, ext = fl & 1, fl & 2
+        if not scan:   # vài phím không có scan code -> tự tra (game đọc scan code mới nhận đúng phím)
+            scan = user32.MapVirtualKeyW(vk, 0) & 0xFFFF
+        t0 = time.perf_counter()
         send_inputs(key_input(vk, scan, (KEYEVENTF_KEYUP if up else 0) | (KEYEVENTF_EXTENDEDKEY if ext else 0)))
+        self._check_slow(t0, "SendInput")
         (self.keys.discard if up else self.keys.add)((vk, scan, ext))
 
     def release_all(self):
@@ -1282,29 +1788,47 @@ class Client:
         if items:
             send_inputs(*items)
 
+    def _title(self):
+        link = self.link
+        set_title("MiniKVM CLIENT | " + (f"master {link.name}" if link else "chưa kết nối")
+                  + (" | đang được điều khiển" if link and self.entered else ""))
+        gui_event({"ev": "client", "master": link.name if link else None, "sync": False,
+                   "entered": bool(link and self.entered), "file": self.file_mode})
+
     def _on_msg(self, link, t, a):
         if link is not self.link:
             return
-        if t == T_MOVE:
-            self.move(link, *a)
-        elif t == T_KEY:
-            self.key(*a)
-        elif t == T_BTN:
-            self.button(*a)
-        elif t == T_WHEEL:
-            send_inputs(mouse_input(MOUSEEVENTF_HWHEEL if a[1] else MOUSEEVENTF_WHEEL, a[0]))
+        if t in INPUT_T:   # phím/chuột chỉ nhận khi chuột đang ở máy này
+            if not self.entered:
+                return     # (gói đến trễ sau LEAVE -> bỏ, tránh kẹt phím)
+            if t == T_RMOVE:
+                self.rmove(link, a)
+            elif t == T_MOVE:
+                self.move(link, *a)
+            elif t == T_KEY:
+                self.key(*a)
+            elif t == T_BTN:
+                self.button(*a)
+            else:
+                send_inputs(mouse_input(MOUSEEVENTF_HWHEEL if a[1] else MOUSEEVENTF_WHEEL, a[0]))
         elif t == T_PING:
             link.send((T_PONG,))
         elif t == T_ENTER:
-            self.edge_t = 0.0
+            self.entered, self.edge_t = True, 0.0
             self.screen.refresh()
             user32.SetCursorPos(*self.screen.entry(*a))
-            send_inputs(mouse_input(MOUSEEVENTF_MOVE))
+            self.poke_ev.set()
             log(">> Chuột/bàn phím đang điều khiển máy này")
+            self._title()
+        elif t == T_MFEEL:
+            self.mouse_like(a)
         elif t == T_LEAVE:
+            self.entered = False
             self.release_all()
+            self.mouse_restore()
             self.worker.submit(self._send_clip, link)
             log("<< Chuột đã rời máy này")
+            self._title()
         elif t == T_CLIP:
             self.worker.submit(self._recv_clip, a)
         elif t == T_FILES:
@@ -1317,6 +1841,7 @@ class Client:
             if on != self.file_mode:
                 self.file_mode = on
                 log(f"[COPY FILE] Master đã {'BẬT' if on else 'TẮT'} copy file")
+                self._title()
 
     def _send_clip(self, link):
         if not self.clip.changed():
@@ -1346,9 +1871,11 @@ class Client:
     def _on_close(self, link):
         if link is self.link:
             self.link = None
+            self.entered = False
             self.release_all()
+            self.mouse_restore()
             log("[X] Mất kết nối master - đang chờ kết nối lại...")
-            set_title("MiniKVM CLIENT | chưa kết nối")
+            self._title()
 
     def run(self):
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -1356,11 +1883,13 @@ class Client:
             srv.bind((self.bind_ip, PORT))
         except OSError as e:
             log(f"[LỖI] Không mở được cổng {PORT}: {e} (đang chạy 2 lần?)")
+            gui_event({"ev": "error", "msg": f"Cổng {PORT} đang bị chiếm - có thể kvm.py đang chạy ở cửa sổ khác"})
+            time.sleep(0.3)
             return
         srv.listen(4)
         srv.settimeout(1.0)
-        log(f"=== MiniKVM CLIENT === đang chờ master kết nối (cổng {PORT})")
-        set_title("MiniKVM CLIENT | chưa kết nối")
+        log(f"=== MiniKVM CLIENT - chuyển máy (bản {VERSION}) === đang chờ master kết nối (cổng {PORT})")
+        self._title()
         try:
             while True:
                 try:
@@ -1376,15 +1905,17 @@ class Client:
                     old.close()
                 link = Link(s, addr[0], self._on_msg, self._on_close)
                 self.link = link
+                link.send((T_HELLO, VERSION))   # báo phiên bản cho master
                 link.start()
                 log(f"[OK] Master {addr[0]} đã kết nối")
-                set_title(f"MiniKVM CLIENT | master {addr[0]}")
+                self._title()
         except KeyboardInterrupt:
             pass
         finally:
             if self.link:
                 self.link.close()
             srv.close()
+            self.mouse_restore()
             log("Đã thoát.")
             time.sleep(0.3)
 
@@ -1406,21 +1937,139 @@ def local_ips(probe):
     return ips
 
 
+CONFIG_KEYS = ("ipTable", "MASTER_IP", "PORT", "FILE_KEY", "HIDE_MASTER_CURSOR", "RAW_MOUSE", "MOUSE_LIKE_MASTER")
+# (cấu hình app còn có SYNC_IPS, LOCK_KEY, CLICK_SETTLE của bản 2 trong 1 -> bản chuyển máy này bỏ qua)
+# Cấu hình do app MiniKVM (kvm_gui.pyw) lưu, nằm cùng chỗ với dữ liệu của app (không để file nào trên Desktop)
+CONFIG_FILE = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "MiniKVM", "config.json")
+LEGACY_NAME = "kvm_config.txt"   # file cấu hình cũ trên Desktop (bản trước) - chỉ đọc khi app chưa lưu cấu hình
+
+
+def desktop_dir():
+    """Thư mục Desktop thật của user (kể cả khi Desktop đã bị OneDrive chuyển sang OneDrive\\Desktop)."""
+    try:
+        buf = ctypes.create_unicode_buffer(260)
+        if windll.shell32.SHGetFolderPathW(None, 0x10, None, 0, buf) == 0 and buf.value:   # CSIDL_DESKTOPDIRECTORY
+            return buf.value
+    except Exception:
+        pass
+    return os.path.join(os.environ.get("USERPROFILE") or os.path.expanduser("~"), "Desktop")
+
+
+def _read_legacy(path):
+    """File cũ dạng `ipTable = [...]`: chỉ đọc giá trị, không chạy code nào trong file."""
+    import ast
+    with open(path, encoding="utf-8-sig") as f:
+        tree = ast.parse(f.read(), path)
+    vals = {}
+    for node in tree.body:
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+                and node.targets[0].id in CONFIG_KEYS):
+            vals[node.targets[0].id] = ast.literal_eval(node.value)
+    return vals
+
+
+def _check_config(vals):
+    """Giá trị đọc được có hợp lệ không (thiếu mục nào thì giữ giá trị ghi trong kvm.py). Sai -> ValueError."""
+    g = globals()
+    t = vals.get("ipTable", g["ipTable"])
+    if not (isinstance(t, list) and all(isinstance(r, list) for r in t)
+            and all(v is None or isinstance(v, str) for r in t for v in r)
+            and sum(v == "MASTER" for r in t for v in r) == 1):
+        raise ValueError('ipTable phải là danh sách các dòng [..], có đúng 1 ô "MASTER"')
+    if not (vals.get("MASTER_IP") is None or isinstance(vals.get("MASTER_IP"), str)):
+        raise ValueError('MASTER_IP phải là None hoặc "IP"')
+    p = vals.get("PORT", 24900)
+    if type(p) is not int or not 1 <= p <= 65535:
+        raise ValueError("PORT phải là số từ 1 đến 65535")
+    fk = vals.get("FILE_KEY", g["FILE_KEY"])
+    if type(fk) is not int or not 0 < fk < 255 or fk == VK_SCROLL:
+        raise ValueError("FILE_KEY phải là mã phím, vd 0x13 (không được là Scroll Lock)")
+    for k in ("HIDE_MASTER_CURSOR", "RAW_MOUSE", "MOUSE_LIKE_MASTER"):
+        if type(vals.get(k, True)) is not bool:
+            raise ValueError(f"{k} phải là True hoặc False")
+
+
+def load_config():
+    """Cấu hình sửa trong app MiniKVM, app lưu ở %APPDATA%\\MiniKVM\\config.json. Chưa có thì đọc file cũ
+    Desktop\\kvm_config.txt (nếu còn), không có nữa thì dùng giá trị ghi ở đầu kvm.py. Không tạo file nào."""
+    path = CONFIG_FILE
+    if not os.path.exists(path):
+        legacy = os.path.join(desktop_dir(), LEGACY_NAME)
+        if not os.path.exists(legacy):
+            log("[CẤU HÌNH] Chưa có cấu hình của app MiniKVM -> dùng giá trị ghi ở đầu file này")
+            gui_event({"ev": "config", "path": path, "st": "none"})
+            return
+        path = legacy
+    try:
+        if path.lower().endswith(".json"):
+            with open(path, encoding="utf-8-sig") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError("nội dung không đúng dạng")
+            vals = {k: v for k, v in data.items() if k in CONFIG_KEYS}
+        else:
+            vals = _read_legacy(path)
+        _check_config(vals)
+    except (OSError, SyntaxError, ValueError) as e:
+        log(f"[CẤU HÌNH] LỖI trong {path}: {e}")
+        log("[CẤU HÌNH] Tạm dùng cấu hình ghi ở đầu file này - mở app MiniKVM để sửa lại")
+        gui_event({"ev": "config", "path": path, "st": "error", "msg": str(e)})
+        return
+    g = globals()
+    g.update(vals)
+    g["KEY_NAME"] = key_name(g["FILE_KEY"])
+    log(f"[CẤU HÌNH] Đọc {path}" + (f" | MASTER_IP = {MASTER_IP}" if MASTER_IP else ""))
+    gui_event({"ev": "config", "path": path, "st": "ok"})
+
+
+def _gui_stdin():
+    """(--gui) Giao diện gửi "quit" qua stdin để dừng; giao diện bị tắt ngang (stdin đóng) cũng tự thoát,
+    không bỏ lại kvm.py chạy ngầm. Thoát tiến trình là Windows tự gỡ hook, client tự nhả phím."""
+    boost_thread()
+    try:
+        for line in sys.stdin:
+            if line.strip().lower() in ("quit", "exit", "stop"):
+                break
+    except Exception:
+        pass
+    run_exit_hooks()   # client: trả lại cài đặt chuột của máy này trước khi thoát
+    log("Đã thoát (giao diện yêu cầu dừng).")
+    time.sleep(0.3)
+    os._exit(0)
+
+
 def main():
+    global GUI
+    args = [a.lower() for a in sys.argv[1:]]
+    GUI = "--gui" in args
     if windll is None:
         print("MiniKVM chỉ chạy trên Windows.")
         return
+    if GUI:
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+        threading.Thread(target=_gui_stdin, name="gui-stdin", daemon=True).start()
     start_logger()
     win_setup()
+    boost_thread()   # MỌI luồng của kvm cùng mức ưu tiên cao: luồng nào đang giữ khóa GIL của Python cũng không bị
+    # Windows cho "ngủ" giữa chừng (nếu không, luồng xử lý chuột phải chờ nó -> giật vài chục ms)
+    load_config()
     clients = [v for row in ipTable for v in row if v and v != "MASTER"]
-    role = sys.argv[1].lower() if len(sys.argv) > 1 else ""
+    role = next((a for a in args if not a.startswith("--")), "")
     if role not in ("master", "client"):
         mine = local_ips(clients[0] if clients else "8.8.8.8")
         role = "client" if mine & set(clients) else "master"
-    if not is_admin():
+    admin = is_admin()
+    gui_event({"ev": "start", "role": role, "version": VERSION, "admin": admin, "port": PORT,
+               "ips": sorted(local_ips(clients[0] if clients else "8.8.8.8"))})
+    if not admin:
         log("[!] Chưa chạy bằng Administrator: sẽ không điều khiển được cửa sổ chạy quyền admin")
+    gc.collect()
+    gc.freeze()   # dồn hết đối tượng lúc khởi động sang vùng "đóng băng": Python dọn rác nhanh hơn, ít khựng
     if role == "master":
-        Master().run()
+        Master().run()   # đọc ipTable lúc này (có thể vừa được nạp từ file cấu hình)
     else:
         Client().run()
 
