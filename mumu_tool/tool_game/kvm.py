@@ -50,6 +50,8 @@ CLICK_SETTLE = 0.008  # ĐỒNG BỘ: client chờ (giây) trước khi click n�
                       # Rê nhanh rồi click mà máy khác click hụt thì tăng lên 0.012 - 0.02
 RAW_MOUSE = True      # CHUYỂN MÁY: gửi chuyển động GỐC của chuột, máy kia tự tính tốc độ như chuột cắm thẳng vào nó
                       # (không bị rề khi khác độ phân giải / scale / tốc độ chuột). False = cách cũ
+MOUSE_LIKE_MASTER = True   # CHUYỂN MÁY: lúc đang điều khiển, máy kia dùng TẠM tốc độ chuột + "Enhance pointer
+                           # precision" của master (chuột đi y như ở master), rời máy thì trả lại cài đặt của nó
 # ========================================================================
 
 import collections
@@ -227,6 +229,7 @@ if windll is not None:
     _sig(user32.PeekMessageW, BOOL, VOIDP, VOIDP, UINT, UINT, UINT)
     _sig(user32.RegisterRawInputDevices, BOOL, ctypes.POINTER(RAWINPUTDEVICE), UINT, UINT)
     _sig(user32.GetRawInputData, UINT, VOIDP, UINT, VOIDP, ctypes.POINTER(UINT), UINT)
+    _sig(user32.SystemParametersInfoW, BOOL, UINT, UINT, VOIDP, UINT)
     _sig(user32.SetWindowPos, BOOL, VOIDP, VOIDP, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, UINT)
     _sig(user32.ShowWindowAsync, BOOL, VOIDP, ctypes.c_int)
     _sig(user32.SetLayeredWindowAttributes, BOOL, VOIDP, DWORD, ctypes.c_ubyte, DWORD)
@@ -346,6 +349,37 @@ def btn_down(b):
     if b in (1, 2) and user32.GetSystemMetrics(SM_SWAPBUTTON):
         b = 3 - b
     return bool(user32.GetAsyncKeyState(BTN_VK[b]) & 0x8000)
+
+
+# ---------- cài đặt chuột của Windows: tốc độ con trỏ (1-20) + "Enhance pointer precision" ----------
+SPI_GETMOUSE, SPI_SETMOUSE, SPI_GETMOUSESPEED, SPI_SETMOUSESPEED = 0x0003, 0x0004, 0x0070, 0x0071
+MOUSE_SAVE = os.path.join(tempfile.gettempdir(), "MiniKVM_mouse.txt")   # cài đặt gốc của client (phòng tắt ngang)
+EXIT_HOOKS = []   # việc phải làm trước khi thoát (trả lại cài đặt chuột của client)
+
+
+def get_mouse():
+    """-> (tốc độ 1-20, ngưỡng 1, ngưỡng 2, gia tốc). "Enhance pointer precision" bật = gia tốc 1."""
+    sp, arr = ctypes.c_int(10), (ctypes.c_int * 3)(6, 10, 1)
+    user32.SystemParametersInfoW(SPI_GETMOUSESPEED, 0, ctypes.byref(sp), 0)
+    user32.SystemParametersInfoW(SPI_GETMOUSE, 0, arr, 0)
+    return (sp.value, arr[0], arr[1], arr[2])
+
+
+def set_mouse(m):
+    """Đặt TẠM (không lưu vào registry, khởi động lại máy là về như cũ)."""
+    speed, t1, t2, acc = m
+    if not (1 <= speed <= 20 and 0 <= acc <= 2):
+        return
+    user32.SystemParametersInfoW(SPI_SETMOUSE, 0, (ctypes.c_int * 3)(t1, t2, acc), 0)
+    user32.SystemParametersInfoW(SPI_SETMOUSESPEED, 0, VOIDP(speed), 0)   # SETMOUSESPEED: giá trị nằm ngay trong tham số
+
+
+def run_exit_hooks():
+    for fn in list(EXIT_HOOKS):
+        try:
+            fn()
+        except Exception:
+            pass
 
 
 # --------------------------------- Log ---------------------------------
@@ -681,7 +715,7 @@ class Worker:
 # Mỗi gói: [kiểu 1 byte][độ dài 4 byte][nội dung]. TCP_NODELAY để không bị trễ.
 (T_WAKE, T_MOVE, T_BTN, T_WHEEL, T_KEY, T_ENTER, T_LEAVE, T_PING, T_PONG, T_EDGE, T_CLIP,
  T_OPT, T_FBEGIN, T_FENTRY, T_FDATA, T_FEND, T_FABORT, T_FILES,
- T_SYNC, T_SPOS, T_SBTN, T_HELLO, T_RMOVE) = range(23)
+ T_SYNC, T_SPOS, T_SBTN, T_HELLO, T_RMOVE, T_MFEEL) = range(24)
 FILE_T = (T_FBEGIN, T_FENTRY, T_FDATA, T_FEND, T_FABORT)
 INPUT_T = (T_MOVE, T_BTN, T_WHEEL, T_KEY, T_SPOS, T_SBTN, T_RMOVE)   # gói phím/chuột
 SYNC_T = (T_SPOS, T_SBTN)                                    # chỉ dùng lúc ĐỒNG BỘ
@@ -695,8 +729,9 @@ FMT = {T_MOVE: struct.Struct("<ii"), T_BTN: struct.Struct("<BB"), T_WHEEL: struc
        T_SPOS: struct.Struct("<ff"),      # ĐỒNG BỘ: vị trí chuột (tỉ lệ màn hình chính)
        T_SBTN: struct.Struct("<BBff"),    # ĐỒNG BỘ: nút chuột + vị trí của chính lần click đó
        T_HELLO: struct.Struct("<H"),      # client báo phiên bản khi vừa kết nối
-       T_RMOVE: struct.Struct("<ii")}     # CHUYỂN MÁY: chuyển động gốc của chuột (raw), client tự tính tốc độ
-VERSION = 3           # 2 = có đồng bộ, 3 = thêm chuyển động chuột gốc. Client cũ hơn master vẫn dùng được (cách cũ)
+       T_RMOVE: struct.Struct("<ii"),     # CHUYỂN MÁY: chuyển động gốc của chuột (raw), client tự tính tốc độ
+       T_MFEEL: struct.Struct("<Biii")}   # CHUYỂN MÁY: cài đặt chuột của master (tốc độ, ngưỡng 1, ngưỡng 2, gia tốc)
+VERSION = 4           # 2 = đồng bộ, 3 = chuyển động chuột gốc, 4 = chuột đi y như master. Client cũ hơn vẫn dùng được
 CHUNK = 64 * 1024     # clipboard lớn được cắt nhỏ, chen giữa các sự kiện chuột
 TIMEOUT = 5.0         # không nhận được gì trong 5s -> coi như mất kết nối
 PING_EVERY = 1.0      # master ping mỗi 1s (kể cả khi đang di chuột), client trả lời PONG
@@ -1201,6 +1236,11 @@ class Master:
             old.link.send((T_LEAVE,))
         if target is not None:   # gửi ENTER TRƯỚC khi đổi active -> máy mới không nhận phím/chuột trước ENTER
             target.link.send((T_ENTER, side, frac))
+            if MOUSE_LIKE_MASTER and target.ver >= 4 and self._use_raw(target):
+                try:   # máy kia dùng tạm tốc độ chuột của master -> chuột đi y như ở master
+                    target.link.send((T_MFEEL,) + get_mouse())
+                except Exception:
+                    log("[LỖI] " + traceback.format_exc())
         self.active = target
         self.raw_wait = [0, 0, 0]
         self.raw_skip = old is None and target is not None
@@ -1764,7 +1804,67 @@ class Client:
         self.entered = False     # CHUYỂN MÁY: chuột đang ở máy này (giữa ENTER và LEAVE)
         self.poke_ev = threading.Event()
         threading.Thread(target=self._poke_loop, name="poke", daemon=True).start()
+        self.my_mouse, self.mlock, self.mfeel_logged = None, threading.Lock(), False   # cài đặt chuột gốc của máy này
+        EXIT_HOOKS.append(self.mouse_restore)
+        self._recover_mouse()
         cleanup_temp(0)
+
+    # ---------- chuột đi y như master: dùng tạm cài đặt chuột của master lúc đang điều khiển máy này ----------
+    def mouse_like(self, m):
+        if not self.entered:
+            return
+        with self.mlock:
+            try:
+                cur = get_mouse()
+                if self.my_mouse is None:   # lưu cài đặt của máy này (cả ra file, phòng kvm bị tắt ngang)
+                    self.my_mouse = cur
+                    try:
+                        with open(MOUSE_SAVE, "w") as f:
+                            f.write(" ".join(map(str, cur)))
+                    except OSError:
+                        pass
+                if cur != tuple(m):
+                    set_mouse(m)
+                    if not self.mfeel_logged:
+                        self.mfeel_logged = True
+                        log(f"[CHUỘT] Lúc điều khiển máy này: dùng tạm tốc độ chuột của master ({m[0]}/20, Enhance "
+                            f"pointer precision {'BẬT' if m[3] else 'TẮT'}). Chuột rời đi là trả lại cài đặt của máy "
+                            f"này ({cur[0]}/20, {'BẬT' if cur[3] else 'TẮT'})")
+            except Exception:
+                log("[LỖI] " + traceback.format_exc())
+
+    def mouse_restore(self):
+        """Trả lại cài đặt chuột của máy này (chuột rời đi / tắt đồng bộ / mất kết nối / thoát)."""
+        with self.mlock:
+            if self.my_mouse is None:
+                return
+            m, self.my_mouse = self.my_mouse, None
+            try:
+                if get_mouse() != m:
+                    set_mouse(m)
+            except Exception:
+                pass
+            try:
+                os.remove(MOUSE_SAVE)
+            except OSError:
+                pass
+
+    def _recover_mouse(self):
+        """Lần trước kvm bị tắt ngang lúc đang dùng tạm cài đặt của master -> trả lại cài đặt của máy này."""
+        if not os.path.exists(MOUSE_SAVE):
+            return
+        try:
+            with open(MOUSE_SAVE) as f:
+                m = tuple(int(v) for v in f.read().split())
+            if len(m) == 4:
+                set_mouse(m)
+                log("[CHUỘT] Lần trước kvm bị tắt ngang -> đã trả lại tốc độ chuột của máy này")
+        except (OSError, ValueError):
+            pass
+        try:
+            os.remove(MOUSE_SAVE)
+        except OSError:
+            pass
 
     def _poke_loop(self):
         """Luồng riêng báo Windows "có thao tác chuột": không tắt màn hình, hiện lại con trỏ bị ẩn lúc gõ phím.
@@ -1842,6 +1942,7 @@ class Client:
     def set_sync(self, on):
         self.release_all()
         self.entered = False
+        self.mouse_restore()
         if on == self.sync:
             return
         self.sync = on
@@ -1918,9 +2019,12 @@ class Client:
             self.poke_ev.set()
             log(">> Chuột/bàn phím đang điều khiển máy này")
             self._title()
+        elif t == T_MFEEL:
+            self.mouse_like(a)
         elif t == T_LEAVE:
             self.entered = False
             self.release_all()
+            self.mouse_restore()
             self.worker.submit(self._send_clip, link)
             log("<< Chuột đã rời máy này")
             self._title()
@@ -1968,6 +2072,7 @@ class Client:
             self.link = None
             self.sync = self.entered = False
             self.release_all()
+            self.mouse_restore()
             log("[X] Mất kết nối master - đang chờ kết nối lại...")
             self._title()
 
@@ -2011,6 +2116,7 @@ class Client:
             if self.link:
                 self.link.close()
             srv.close()
+            self.mouse_restore()
             log("Đã thoát.")
             time.sleep(0.3)
 
@@ -2035,7 +2141,7 @@ def local_ips(probe):
 CONFIG_NAME = "kvm_config.txt"   # nằm trên Desktop của user đang chạy kvm.py
 CONFIG_FILE = CONFIG_NAME
 CONFIG_KEYS = ("ipTable", "MASTER_IP", "SYNC_IPS", "PORT", "FILE_KEY", "LOCK_KEY", "CLICK_SETTLE", "HIDE_MASTER_CURSOR",
-               "RAW_MOUSE")
+               "RAW_MOUSE", "MOUSE_LIKE_MASTER")
 CONFIG_TEMPLATE = '''# Cấu hình MiniKVM - sửa file này, KHÔNG cần sửa kvm.py. Dòng bắt đầu bằng # là ghi chú.
 # Sửa xong thì tắt kvm.py rồi chạy lại.
 
@@ -2071,6 +2177,10 @@ HIDE_MASTER_CURSOR = True
 # CHUYỂN MÁY: gửi chuyển động GỐC của chuột -> máy kia tự tính tốc độ như chuột cắm thẳng vào nó (mượt, đúng tốc độ).
 # Chuột sang máy khác bị lỗi lạ (đi sai, không đi) thì đặt False để dùng cách cũ. Chỉ cần sửa ở máy MASTER.
 RAW_MOUSE = True
+
+# CHUYỂN MÁY: lúc đang điều khiển, máy kia dùng TẠM tốc độ chuột + "Enhance pointer precision" của master -> chuột đi
+# y như ở master. Chuột rời máy đó là trả lại cài đặt của nó. False = mỗi máy dùng cài đặt chuột riêng. Sửa ở MASTER.
+MOUSE_LIKE_MASTER = True
 '''
 
 
@@ -2136,6 +2246,8 @@ def load_config():
             raise ValueError("HIDE_MASTER_CURSOR phải là True hoặc False")
         if type(vals.get("RAW_MOUSE", True)) is not bool:
             raise ValueError("RAW_MOUSE phải là True hoặc False")
+        if type(vals.get("MOUSE_LIKE_MASTER", True)) is not bool:
+            raise ValueError("MOUSE_LIKE_MASTER phải là True hoặc False")
     except (OSError, SyntaxError, ValueError) as e:
         log(f"[CẤU HÌNH] LỖI trong {CONFIG_FILE}: {e}")
         log("[CẤU HÌNH] Sửa file rồi chạy lại. Tạm dùng cấu hình trong kvm.py")
@@ -2156,6 +2268,7 @@ def _gui_stdin():
                 break
     except Exception:
         pass
+    run_exit_hooks()   # client: trả lại cài đặt chuột của máy này trước khi thoát
     log("Đã thoát (giao diện yêu cầu dừng).")
     time.sleep(0.3)
     os._exit(0)
