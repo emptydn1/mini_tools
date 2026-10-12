@@ -11,7 +11,9 @@ from mumu_tool.tool_game.kiemhieptinh1.giao_dich_van import giao_dich_van_Hoang,
 from mumu_tool.tool_game.kiemhieptinh1.tool_vut_exp import tool_vut_exp
 from mumu_tool.tool_game.kiemhieptinh1.da_tau import lam_da_tau, vut_do_da_tau
 from mumu_tool.tool_game.utils import auto_click, auto_luom, test_click
-from mumu_tool.tool_game.utils_sync import sync_mouse_keyboard
+from pathlib import Path
+import subprocess
+import sys
 
 
 def run_menu(title, menu_dict):
@@ -87,9 +89,18 @@ def menu_mumuplayer():
 
 
 def menu_sync_mouse_keyboard():
+    file_path = Path(__file__).parent / "mumu_tool" / "tool_game" / "kvm.py"
+    CREATE_NEW_CONSOLE = 0x00000010
+
+    def start(role):
+        if not file_path.exists():
+            print(f"Không tìm thấy {file_path}")
+            return
+        subprocess.Popen([sys.executable, str(file_path), role], creationflags=CREATE_NEW_CONSOLE)
+
     menu = {
-        "1": ("MASTER", lambda: sync_mouse_keyboard("MASTER")),
-        "2": ("SLAVE", lambda: sync_mouse_keyboard("SLAVE")),
+        "1": ("MASTER", lambda: start("master")),
+        "2": ("CLIENT", lambda: start("client")),
     }
     run_menu("Sync Mouse Keyboard", menu)
 
