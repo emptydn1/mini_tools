@@ -720,7 +720,9 @@ FILE_T = (T_FBEGIN, T_FENTRY, T_FDATA, T_FEND, T_FABORT)
 INPUT_T = (T_MOVE, T_BTN, T_WHEEL, T_KEY, T_SPOS, T_SBTN, T_RMOVE)   # gói phím/chuột
 SYNC_T = (T_SPOS, T_SBTN)                                    # chỉ dùng lúc ĐỒNG BỘ
 MOVE_T = (T_MOVE, T_RMOVE, T_SPOS)   # các kiểu di chuột: dồn nhiều gói thì gộp lại
-SUM_T = (T_MOVE, T_RMOVE)            # di chuột tương đối: gộp = cộng dồn (T_SPOS: lấy vị trí mới nhất)
+PEND_T = (T_MOVE, T_SPOS)            # bên gửi gộp được: T_MOVE cộng dồn pixel, T_SPOS lấy vị trí mới nhất
+# T_RMOVE (chuyển động gốc) KHÔNG BAO GIỜ cộng dồn: Windows tính gia tốc chuột ("Enhance pointer precision") theo TỪNG
+# bước, gộp 3 bước nhỏ thành 1 bước to là Windows tưởng chuột vung nhanh -> tăng tốc quá đà, đi không giống master
 HDR = struct.Struct("<BI")
 FMT = {T_MOVE: struct.Struct("<ii"), T_BTN: struct.Struct("<BB"), T_WHEEL: struct.Struct("<hB"),
        T_KEY: struct.Struct("<HHB"), T_ENTER: struct.Struct("<Bf"), T_EDGE: struct.Struct("<Bf"),
@@ -814,12 +816,12 @@ class Link:
                     item = q.get_nowait() if self.stream is not None else q.get(timeout=PING_EVERY)
                 except queue.Empty:
                     item = None
-                buf, pend, n = bytearray(), None, 0   # pend: bước di chuột đang gộp (T_MOVE / T_RMOVE / T_SPOS)
+                buf, pend, n = bytearray(), None, 0   # pend: bước di chuột đang gộp (T_MOVE / T_SPOS)
                 while item is not None:
                     t = item[0]
-                    if t in SUM_T and pend is not None and pend[0] == t:
-                        pend = (t, pend[1] + item[1], pend[2] + item[2])   # cộng dồn bước tương đối
-                    elif t in MOVE_T:   # T_SPOS (đồng bộ): chỉ cần vị trí mới nhất
+                    if t == T_MOVE and pend is not None and pend[0] == T_MOVE:
+                        pend = (t, pend[1] + item[1], pend[2] + item[2])   # cộng dồn pixel
+                    elif t in PEND_T:   # T_SPOS (đồng bộ): chỉ cần vị trí mới nhất
                         if pend is not None and pend[0] != t:
                             buf += encode(pend)
                         pend = item
@@ -880,12 +882,16 @@ class Link:
                     body = bytes(buf[pos + 5:end])
                     pos = end
                     if t in MOVE_T:
-                        # nhiều bước di chuột đến dồn (máy đang bận) -> gộp, xử lý 1 lần: chuột nhảy thẳng tới chỗ
-                        # mới nhất thay vì chạy lại từng bước rồi trễ dần
+                        # nhiều bước di chuột đến dồn -> xử lý 1 lần: T_MOVE cộng dồn, T_SPOS lấy vị trí mới nhất,
+                        # T_RMOVE gom thành danh sách (đưa vào Windows 1 lần nhưng vẫn TỪNG bước riêng)
                         a = FMT[t].unpack(body)
+                        if t == T_RMOVE:
+                            a = (a,)
                         if mv is not None and mv[0] == t:
-                            if t in SUM_T:
+                            if t == T_MOVE:
                                 a = (mv[1][0] + a[0], mv[1][1] + a[1])
+                            elif t == T_RMOVE:
+                                a = mv[1] + a
                         elif mv is not None:
                             self._dispatch(*mv)
                         mv = (t, a)
@@ -1901,10 +1907,12 @@ class Client:
         self.poke_ev.set()
         self._check_slow(t0, "di chuột")
 
-    def rmove(self, link, dx, dy):
+    def rmove(self, link, moves):
         """CHUYỂN MÁY, chuyển động gốc (raw) của chuột master: đưa vào Windows máy này như chuột cắm thẳng vào nó
-        -> Windows tự áp tốc độ chuột, gia tốc, scale màn hình của máy này: mượt y như chuột thật."""
+        -> Windows tự áp tốc độ chuột, gia tốc, scale màn hình của máy này: mượt y như chuột thật.
+        moves = các bước đến cùng lúc: đưa vào Windows trong 1 lệnh nhưng vẫn TỪNG bước riêng (không cộng dồn)."""
         t0 = time.perf_counter()
+        dx, dy = sum(m[0] for m in moves), sum(m[1] for m in moves)
         x, y = cursor_pos()
         c = self.screen.contains   # đang nằm sát mép mà vẫn đẩy ra ngoài -> báo master chuyển máy
         out = [d for d, push in ((LEFT, dx < 0 and not c(x - 1, y)), (RIGHT, dx > 0 and not c(x + 1, y)),
@@ -1917,7 +1925,7 @@ class Client:
                     out.sort(key=lambda d: d < UP)   # đẩy dọc nhiều hơn -> ưu tiên trên/dưới
                 for d in out:
                     link.send((T_EDGE, d, self.screen.frac(d, x, y)))
-        send_inputs(mouse_input(MOUSEEVENTF_MOVE, 0, dx, dy))
+        send_inputs(*[mouse_input(MOUSEEVENTF_MOVE, 0, mx, my) for mx, my in moves])
         self._check_slow(t0, "di chuột")
 
     # ---------- ĐỒNG BỘ: vị trí tuyệt đối theo tỉ lệ màn hình master ----------
@@ -1995,7 +2003,7 @@ class Client:
             if t in SYNC_T and not self.sync or not (self.entered or self.sync):
                 return     # (gói đến trễ sau LEAVE / sau khi tắt đồng bộ -> bỏ, tránh kẹt phím)
             if t == T_RMOVE:
-                self.rmove(link, *a)
+                self.rmove(link, a)
             elif t == T_MOVE:
                 self.move(link, *a)
             elif t == T_SPOS:
