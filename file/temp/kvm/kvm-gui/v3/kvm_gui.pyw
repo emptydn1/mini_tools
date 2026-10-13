@@ -70,11 +70,10 @@ KEYS = [("Pause/Break", 0x13), ("Insert", 0x2D), ("Home", 0x24), ("End", 0x23), 
         ("Page Down", 0x22)] + [(f"F{i}", 0x6F + i) for i in range(1, 13)]
 
 # ------------------------------- cấu hình kvm (%APPDATA%\MiniKVM\config.json) -------------------------------
-CFG_KEYS = ("ipTable", "MASTER_IP", "SYNC_IPS", "PORT", "LOCK_KEY", "CLICK_SETTLE", "HIDE_MASTER_CURSOR",
-            "RAW_MOUSE", "MOUSE_LIKE_MASTER")
+CFG_KEYS = ("ipTable", "MASTER_IP", "SYNC_IPS", "PORT", "LOCK_KEY", "CLICK_SETTLE", "RAW_MOUSE",
+            "MOUSE_LIKE_MASTER")
 BASE_CFG = {"ipTable": [[None, "MASTER", None]], "MASTER_IP": None, "SYNC_IPS": None, "PORT": 24900,
-            "LOCK_KEY": None, "CLICK_SETTLE": 0.008, "HIDE_MASTER_CURSOR": True, "RAW_MOUSE": False,
-            "MOUSE_LIKE_MASTER": True}
+            "LOCK_KEY": None, "CLICK_SETTLE": 0.008, "RAW_MOUSE": False, "MOUSE_LIKE_MASTER": True}
 
 
 def parse_assigns(text, keys):
@@ -120,7 +119,7 @@ def validate(c):
     cs = c.get("CLICK_SETTLE")
     if type(cs) not in (int, float) or not 0 <= cs <= 0.1:
         return "Thời gian chờ trước khi click phải từ 0 đến 100 ms"
-    for k in ("HIDE_MASTER_CURSOR", "RAW_MOUSE", "MOUSE_LIKE_MASTER"):
+    for k in ("RAW_MOUSE", "MOUSE_LIKE_MASTER"):
         if type(c.get(k)) is not bool:
             return f"{k} phải là True hoặc False"
     return None
@@ -737,8 +736,7 @@ class ServerConfig(tk.Toplevel):
         except ValueError:
             raise ValueError("Cổng phải là số từ 1 đến 65535")
         lk = None if self.lock_key.get() == "Không dùng" else self.key_codes[self.lock_key.get()]
-        cfg = dict(self.cfg, ipTable=table, SYNC_IPS=sync, PORT=port, LOCK_KEY=lk,
-                   HIDE_MASTER_CURSOR=self.hide_var.get(), RAW_MOUSE=self.raw_var.get(),
+        cfg = dict(self.cfg, ipTable=table, SYNC_IPS=sync, PORT=port, LOCK_KEY=lk, RAW_MOUSE=self.raw_var.get(),
                    MOUSE_LIKE_MASTER=self.like_var.get())
         err = validate(cfg)
         if err:
@@ -988,7 +986,6 @@ class ServerConfig(tk.Toplevel):
         tab = ttk.Frame(nb, padding=16)
         nb.add(tab, text="Nâng cao")
         self.port_var = tk.StringVar(value=str(self.cfg["PORT"]))
-        self.hide_var = tk.BooleanVar(value=self.cfg["HIDE_MASTER_CURSOR"])
         self.raw_var = tk.BooleanVar(value=self.cfg["RAW_MOUSE"])
         self.like_var = tk.BooleanVar(value=self.cfg["MOUSE_LIKE_MASTER"])
         self.extra_var = tk.StringVar(value=", ".join(self.extra_sync))
@@ -1001,10 +998,8 @@ class ServerConfig(tk.Toplevel):
             row=1, column=0, sticky="w", pady=6)
         ttk.Entry(g, textvariable=self.extra_var, width=34).grid(row=1, column=1, sticky="w", padx=12)
         ttk.Separator(tab).pack(fill="x", pady=12)
-        ttk.Checkbutton(tab, text="Ẩn con trỏ của máy chủ khi đang điều khiển máy khác",
-                        variable=self.hide_var).pack(anchor="w", pady=3)
         ttk.Checkbutton(tab, text="Chuyển máy bằng chuyển động chuột gốc (raw)", variable=self.raw_var,
-                        command=self._raw_changed).pack(anchor="w", pady=(10, 0))
+                        command=self._raw_changed).pack(anchor="w", pady=(3, 0))
         ttk.Label(tab, text="Chỉ bật khi chơi game xoay camera bằng chuột trên máy khác (vd CS2, GTA; Valorant "
                             "thường không nhận). Máy khách bận thì có thể bị trễ.",
                   style="Muted.TLabel").pack(anchor="w", padx=(26, 0))
