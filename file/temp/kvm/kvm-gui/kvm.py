@@ -187,6 +187,9 @@ KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP = 0x0001, 0x0002
 CF_DIB, CF_UNICODETEXT, CF_HDROP, GMEM_MOVEABLE = 8, 13, 15, 0x0002
 HWND_MESSAGE, HWND_TOPMOST = VOIDP(-3), VOIDP(-1)
 WM_SETCURSOR, HIDER = 0x0020, 16   # HIDER: cỡ cửa sổ che con trỏ (pixel)
+WM_KVM_FOCUS, WM_KVM_UNFOCUS = 0x8031, 0x8032   # (master) nhờ thread hook: lấy focus / trả focus cho app cũ
+WM_KVM_REHOOK = 0x8033                          # (master) nhờ thread hook: cài lại hook cho đứng đầu chuỗi
+REHOOK_EVERY = 2.0                              # đang điều khiển máy khác: cứ 2 giây cài lại hook 1 lần
 INJECT_TAG = 0x4B564D  # "KVM"
 
 
@@ -239,6 +242,13 @@ if windll is not None:
     _sig(user32.SystemParametersInfoW, BOOL, UINT, UINT, VOIDP, UINT)
     _sig(user32.SetWindowPos, BOOL, VOIDP, VOIDP, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, UINT)
     _sig(user32.ShowWindowAsync, BOOL, VOIDP, ctypes.c_int)
+    _sig(user32.ShowWindow, BOOL, VOIDP, ctypes.c_int)
+    _sig(user32.GetForegroundWindow, VOIDP)
+    _sig(user32.SetForegroundWindow, BOOL, VOIDP)
+    _sig(user32.AttachThreadInput, BOOL, DWORD, DWORD, BOOL)
+    _sig(user32.GetWindowThreadProcessId, DWORD, VOIDP, VOIDP)
+    _sig(user32.IsWindow, BOOL, VOIDP)
+    _sig(user32.IsHungAppWindow, BOOL, VOIDP)
     _sig(user32.SetLayeredWindowAttributes, BOOL, VOIDP, DWORD, ctypes.c_ubyte, DWORD)
     _sig(user32.CreateCursor, VOIDP, VOIDP, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, VOIDP, VOIDP)
     _sig(user32.SetCursor, VOIDP, VOIDP)
@@ -1133,6 +1143,10 @@ class Master:
         cleanup_temp(0)
         self.running, self.hook_tid = True, 0
         self._hider = self._blank = None
+        self._hm = self._hk = None                         # hook chuột / bàn phím đang cài
+        self._focus_wnd = self._prev_fg = None             # giữ focus khi điều khiển máy khác (giống Deskflow)
+        self._focus_wait = self._focus_warned = False
+        self._rehook_t = 0.0                               # lần cuối cài lại hook
         # chuyển động chuột gốc (raw): None = chưa biết (thử), True = đang dùng, False = dùng cách cũ
         self.raw = None if RAW_MOUSE else False
         self.raw_wait = [0, 0, 0]   # bước di chuột hook thấy mà chưa có raw tương ứng: dx, dy, số lần
@@ -1259,6 +1273,8 @@ class Master:
         self.active = target
         self.raw_wait = [0, 0, 0]
         self.raw_skip = old is None and target is not None
+        if (old is None) != (target is None):
+            self._post_focus(target is not None)
         if target is None:
             self.cell = self.home
             x, y = self.screen.park if side is None else self.screen.entry(side, frac)
@@ -1315,6 +1331,95 @@ class Master:
     def _show_cursor(self):
         if self._hider:
             user32.ShowWindowAsync(self._hider, 0)   # SW_HIDE, không chặn thread nào
+
+    # ---------- giữ focus khi đang điều khiển máy khác (cách Deskflow làm) ----------
+    # Hook chặn phím xong, nhưng có ứng dụng đọc bàn phím bằng đường khác (raw input, DirectInput, hook riêng cài
+    # sau kvm - giả lập, game...) nên vẫn nhận phím đang gõ cho máy khác. Rời master: cho cửa sổ 1x1 của kvm làm
+    # cửa sổ chính (ứng dụng kia mất focus -> không nhận phím nữa); về master: trả focus cho đúng ứng dụng cũ.
+    def _make_focus(self):
+        hinst = kernel32.GetModuleHandleW(None)
+        self._fproc = WNDPROC(lambda h, m, w, lp: user32.DefWindowProcW(h, m, w, lp))
+        wc = WNDCLASSW(lpfnWndProc=self._fproc, hInstance=hinst, lpszClassName="MiniKVMFocus")
+        user32.RegisterClassW(ctypes.byref(wc))
+        # TOOLWINDOW (không hiện ở taskbar / Alt+Tab) | LAYERED, kiểu POPUP. KHÔNG NOACTIVATE: phải nhận được focus
+        self._focus_wnd = user32.CreateWindowExW(0x00080080, "MiniKVMFocus", None, 0x80000000,
+                                                 0, 0, 1, 1, None, None, hinst, None)
+        if self._focus_wnd:
+            user32.SetLayeredWindowAttributes(self._focus_wnd, 0, 1, 2)   # độ đậm 1/255: mắt không thấy
+
+    def _post_focus(self, take):
+        """Đổi focus ở thread hook (thread sở hữu cửa sổ), sau khi hook trả lời xong - hook không bị chậm."""
+        if self.hook_tid:
+            user32.PostThreadMessageW(self.hook_tid, WM_KVM_FOCUS if take else WM_KVM_UNFOCUS, 0, 0)
+
+    @staticmethod
+    def _set_foreground(hwnd):
+        """SetForegroundWindow như Deskflow: gắn tạm hàng đợi input với cửa sổ đang có focus thì Windows mới cho đổi."""
+        fg = user32.GetForegroundWindow()
+        me = kernel32.GetCurrentThreadId()
+        other = user32.GetWindowThreadProcessId(fg, None) if fg else 0
+        attached = bool(other and other != me and not user32.IsHungAppWindow(fg)
+                        and user32.AttachThreadInput(other, me, True))
+        try:
+            user32.SetForegroundWindow(hwnd)
+        finally:
+            if attached:
+                user32.AttachThreadInput(other, me, False)
+
+    def _take_focus(self):
+        if self.active is None:   # (lệnh cũ: người dùng đã về master rồi -> bỏ qua)
+            return
+        self._rehook()
+        w = self._focus_wnd
+        if not w:
+            return
+        # Phím nhấn ở master mà còn đang giữ: phím NHẢ phải tới được ứng dụng ở master (không thì ứng dụng tưởng
+        # phím vẫn giữ, vd nhân vật cứ đi mãi) -> nhả hết rồi mới lấy focus (_on_key gọi lại)
+        self.local_down = {vk for vk in self.local_down if user32.GetAsyncKeyState(vk) & 0x8000}
+        self._focus_wait = bool(self.local_down)
+        if self._focus_wait:
+            return
+        fg = user32.GetForegroundWindow()
+        if fg != w:
+            self._prev_fg = fg
+            x, y = self.screen.park
+            user32.SetWindowPos(w, None, x, y, 1, 1, 0x0010 | 0x0040)   # NOACTIVATE | SHOWWINDOW
+            self._set_foreground(w)
+            if user32.GetForegroundWindow() != w and not self._focus_warned:
+                self._focus_warned = True
+                log("[!] Không lấy được focus khi sang máy khác (ứng dụng đang mở ở máy chủ chạy bằng quyền Admin?)"
+                    " -> phím có thể vẫn tới ứng dụng đó. Chạy MiniKVM bằng quyền Admin để sửa")
+
+    def _give_focus(self, force=False):
+        w = self._focus_wnd
+        if not w or (self.active is not None and not force):   # (lệnh cũ: đã sang máy khác lần nữa -> bỏ qua)
+            return
+        self._focus_wait = False
+        prev, self._prev_fg = self._prev_fg, None
+        if prev and user32.IsWindow(prev) and user32.GetForegroundWindow() == w:
+            self._set_foreground(prev)
+        user32.ShowWindow(w, 0)   # SW_HIDE
+
+    def _exit_focus(self):
+        """Thoát lúc đang điều khiển máy khác: trả focus cho ứng dụng ở master trước khi tắt."""
+        if self.hook_tid and self._prev_fg:
+            user32.PostThreadMessageW(self.hook_tid, WM_KVM_UNFOCUS, 1, 0)   # wParam 1 = trả luôn
+            time.sleep(0.1)
+
+    def _rehook(self):
+        """Cài lại hook để đứng ĐẦU chuỗi hook. Windows đưa phím cho hook cài SAU CÙNG trước tiên: script hotkey
+        (thư viện keyboard: keyboard.add_hotkey), Unikey/EVKey, giả lập... mở sau kvm sẽ thấy phím trước kvm.
+        Đứng đầu -> phím/chuột đang gửi sang máy khác bị chặn trước khi tới chúng.
+        (Cài cái mới trước rồi mới gỡ cái cũ: không lúc nào thiếu hook.) Làm lúc rời master + 2 giây 1 lần."""
+        self._rehook_t = time.monotonic()
+        hmod = kernel32.GetModuleHandleW(None)
+        for kind, attr, proc in ((WH_KEYBOARD_LL, "_hk", self._kproc), (WH_MOUSE_LL, "_hm", self._mproc)):
+            new = user32.SetWindowsHookExW(kind, proc, hmod, 0)
+            if new:
+                old = getattr(self, attr)
+                setattr(self, attr, new)
+                if old and old != new:
+                    user32.UnhookWindowsHookEx(old)
 
     # ---------- trạng thái / log ----------
     def _title(self):
@@ -1496,6 +1601,11 @@ class Master:
             return False
         if up and vk in self.local_down:   # phím nhấn lúc còn ở master -> nhả ở master, tránh kẹt phím
             self.local_down.discard(vk)
+            if self._focus_wait and not self.local_down:   # đã nhả hết -> giờ mới lấy focus (đợi phím nhả tới app)
+                self._focus_wait = False
+                t = threading.Timer(0.1, self._post_focus, (True,))
+                t.daemon = True
+                t.start()
             return False
         link = act.link
         if link:
@@ -1509,18 +1619,34 @@ class Master:
             self._make_hider()   # cửa sổ phải thuộc thread có vòng lặp message (thread này)
         if self.raw is not False:
             self._make_raw()
+        self._make_focus()
         self._mproc, self._kproc = HOOKPROC(self._mouse_proc), HOOKPROC(self._kbd_proc)
         hmod = kernel32.GetModuleHandleW(None)
-        hm = user32.SetWindowsHookExW(WH_MOUSE_LL, self._mproc, hmod, 0)
-        hk = user32.SetWindowsHookExW(WH_KEYBOARD_LL, self._kproc, hmod, 0)
-        if not hm or not hk:
+        self._hm = user32.SetWindowsHookExW(WH_MOUSE_LL, self._mproc, hmod, 0)
+        self._hk = user32.SetWindowsHookExW(WH_KEYBOARD_LL, self._kproc, hmod, 0)
+        if not self._hm or not self._hk:
             log("[LỖI] Không cài được hook chuột/bàn phím")
             return
         msg = wt.MSG()
         while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+            if not msg.hWnd and msg.message in (WM_KVM_FOCUS, WM_KVM_UNFOCUS, WM_KVM_REHOOK):
+                try:
+                    if msg.message == WM_KVM_FOCUS:
+                        self._take_focus()
+                    elif msg.message == WM_KVM_UNFOCUS:
+                        self._give_focus(bool(msg.wParam))
+                    elif self.active is not None:
+                        self._rehook()
+                except Exception:
+                    log("[LỖI focus] " + traceback.format_exc())
+                continue
             user32.DispatchMessageW(ctypes.byref(msg))
-        user32.UnhookWindowsHookEx(hm)
-        user32.UnhookWindowsHookEx(hk)
+        try:
+            self._give_focus(True)   # thoát lúc đang ở máy khác: trả focus cho ứng dụng ở master
+        except Exception:
+            pass
+        user32.UnhookWindowsHookEx(self._hm)
+        user32.UnhookWindowsHookEx(self._hk)
 
     # ---------- ĐỒNG BỘ ----------
     def _bcast(self, item):
@@ -1601,7 +1727,8 @@ class Master:
         - ĐỒNG BỘ: con trỏ bị phần mềm/game tự dời (hook không thấy) -> gửi vị trí mới; tự nhả phím/nút kẹt.
         - Đèn Scroll Lock là chuẩn: chế độ lệch đèn quá 1 giây thì theo đèn (bấm Scroll Lock lúc đang ở màn hình
           UAC, Ctrl+Alt+Del, màn hình khóa, cửa sổ quyền admin... thì hook không thấy). Chỉ làm khi đã thấy đèn
-          đổi ít nhất 1 lần (chứng tỏ đọc được đèn thật), để không bao giờ "bấm xong 1 giây tự đổi lại"."""
+          đổi ít nhất 1 lần (chứng tỏ đọc được đèn thật), để không bao giờ "bấm xong 1 giây tự đổi lại".
+        - Đang điều khiển máy khác: 2 giây cài lại hook 1 lần (xem _rehook)."""
         boost_thread()
         led_seen, live, bad_t, stuck_t = led_on(), False, None, 0.0
         while self.running:
@@ -1619,6 +1746,9 @@ class Master:
                         self.set_sync(led, "khớp theo đèn Scroll Lock")
                 else:
                     bad_t = None
+                if self.active is not None and self.hook_tid and now - self._rehook_t >= REHOOK_EVERY:
+                    self._rehook_t = now   # script hotkey... vừa mở lại lúc đang ở máy khác -> kvm lại đứng đầu
+                    user32.PostThreadMessageW(self.hook_tid, WM_KVM_REHOOK, 0, 0)
                 if not self.sync or self.active is not None:
                     continue
                 if now - self.move_t > 0.05:
@@ -1746,6 +1876,7 @@ class Master:
             peer.rtts.clear()
             if self.active is peer:
                 self.active, self.cell = None, self.home
+                self._post_focus(False)
                 self._show_cursor()
                 user32.SetCursorPos(*self.screen.park)
                 self.px, self.py = self.screen.park
@@ -1789,6 +1920,7 @@ class Master:
         self._log_file()
         if LOCK_KEY:
             log(f"[KHÓA] bấm {key_name(LOCK_KEY)} để khóa/mở khóa chuột ở máy đang dùng")
+        EXIT_HOOKS.append(self._exit_focus)   # (giao diện bấm Dừng/Thoát lúc đang ở máy khác)
         threading.Thread(target=self._hook_loop, name="hook", daemon=True).start()
         threading.Thread(target=self._watch_loop, name="watch", daemon=True).start()
         for p in self.peer_list:
