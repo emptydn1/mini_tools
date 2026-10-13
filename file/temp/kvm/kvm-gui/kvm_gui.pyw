@@ -6,7 +6,9 @@ Cách dùng: đặt file này CÙNG THƯ MỤC với kvm.py rồi bấm đúp (�
   - Chọn "Máy chủ" hoặc "Máy khách" rồi bấm Bắt đầu. Máy chủ bấm "Cấu hình máy chủ" để kéo thả vị trí các máy.
   - Bấm X = ẩn xuống khay (biểu tượng cạnh đồng hồ). Bấm vào biểu tượng để mở lại, chuột phải để Bắt đầu/Dừng/Thoát.
     Màu biểu tượng: xám = dừng, xanh lá = đang chạy, xanh dương = ĐỒNG BỘ, vàng = đang chờ, đỏ = lỗi.
-  - "Khởi động cùng Windows": mở app bằng quyền Admin rồi tick -> đăng nhập Windows là tự chạy (quyền Admin) dưới khay.
+  - Quyền Admin: bấm "Chạy bằng Admin" 1 lần (Windows hỏi đúng 1 lần) -> từ đó mở app là tự có quyền Admin, không hỏi
+    nữa (ô "Luôn mở bằng quyền Admin" = tác vụ tên MiniKVM trong Task Scheduler, bỏ tick là xóa tác vụ).
+  - "Khởi động cùng Windows": đăng nhập Windows là app tự chạy dưới khay (bằng quyền Admin nếu đã bật ô trên).
   - Cấu hình sửa ngay trong app, app tự lưu ở %APPDATA%\\MiniKVM\\config.json (kvm.py đọc file này) - không còn
     file nào trên Desktop. Lần đầu mở app, nếu còn file cũ Desktop\\kvm_config.txt thì app tự chép cấu hình sang.
   - Lỗi của app: %APPDATA%\\MiniKVM\\loi.txt ; nhật ký: %APPDATA%\\MiniKVM\\nhat_ky.txt
@@ -14,6 +16,7 @@ Cách dùng: đặt file này CÙNG THƯ MỤC với kvm.py rồi bấm đúp (�
 Cần: Python 3.8+ có tkinter (bản cài từ python.org có sẵn).
 Biểu tượng dưới khay: pip install pystray pillow  (hoặc bấm "Cài ngay" trong app; không có thì bấm X chỉ thu nhỏ).
 Tham số: --tray  mở sẵn dưới khay và tự bật kvm (dùng cho "Khởi động cùng Windows").
+         --task  (tác vụ Task Scheduler gọi) bản quyền Admin mở không cần hỏi.
 """
 import ast
 import ctypes
@@ -44,14 +47,16 @@ except ImportError:   # .pyw không có cửa sổ CMD: phải báo bằng hộp
 APP = "MiniKVM"
 IS_WIN = sys.platform == "win32"
 HERE = os.path.dirname(os.path.abspath(__file__))
-KVM_PATH = os.environ.get("MINIKVM_KVM") or os.path.join(HERE, "kvm.py")
+KVM_PATH = os.environ.get("MINIKVM_KVM") or os.path.join(HERE, "kvm.py")   # kvm.py nằm cạnh app
 DATA_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), APP)   # dữ liệu của app
 SETTINGS_FILE = os.path.join(DATA_DIR, "gui.json")    # cài đặt cửa sổ (vai trò, ẩn xuống khay...)
 CONFIG_FILE = os.path.join(DATA_DIR, "config.json")   # cấu hình kvm: vị trí các máy, IP, cổng... (kvm.py đọc)
 CONTROL_PORT = int(os.environ.get("MINIKVM_CONTROL_PORT", "24899"))   # 127.0.0.1: mở app lần 2 -> hiện app cũ
 CREATE_NO_WINDOW = 0x08000000 if IS_WIN else 0
-TASK_NAME = "MiniKVM"
+TASK_NAME = "MiniKVM"   # tác vụ Task Scheduler: "Luôn mở bằng quyền Admin" (+ tự chạy khi đăng nhập)
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+APP_FILE = os.path.abspath(__file__)   # file app đang chạy (kvm_gui.pyw)
+HANDOFF_FILE = os.path.join(DATA_DIR, "handoff.json")   # bản quyền thường gửi tùy chọn sang bản Admin
 
 # ------------------------------- màu (tối, giống Deskflow) -------------------------------
 BG, PANEL, CELL, GRID, FIELD, BORDER = "#2b2b2b", "#353535", "#232323", "#161616", "#1e1e1e", "#4a4a4a"
@@ -271,8 +276,34 @@ def run_quiet(args):
         return -1
 
 
+def run_out(args):
+    """Như run_quiet nhưng lấy cả câu báo của chương trình -> (mã lỗi, câu báo) để ghi vào nhật ký khi lỗi."""
+    try:
+        r = subprocess.run(args, capture_output=True, creationflags=CREATE_NO_WINDOW, timeout=20)
+    except (OSError, subprocess.SubprocessError) as e:
+        return -1, str(e)
+    enc = "utf-8"
+    if IS_WIN:
+        try:   # chương trình console của Windows in chữ theo bảng mã OEM
+            enc = f"cp{ctypes.windll.kernel32.GetOEMCP()}"
+        except Exception:
+            pass
+    raw = (r.stderr or b"") + b" " + (r.stdout or b"")
+    try:
+        text = raw.decode(enc, "replace")
+    except LookupError:
+        text = raw.decode("utf-8", "replace")
+    return r.returncode, " ".join(text.split())[:300]
+
+
+def app_launch(extra=""):
+    """Lệnh mở app (không cửa sổ CMD): (pythonw.exe, '"...kvm_gui.pyw" tham số')."""
+    return pythonw(), f'"{APP_FILE}" {extra}'.strip()
+
+
 def autostart_cmd():
-    return f'"{pythonw()}" "{os.path.abspath(__file__)}" --tray'
+    exe, args = app_launch("--tray")
+    return f'"{exe}" {args}'
 
 
 def win_user():
@@ -287,19 +318,16 @@ def win_user():
     return f"{dom}\\{user}" if dom else user
 
 
+# Tác vụ Task Scheduler "MiniKVM" = "Luôn mở bằng quyền Admin": Windows chạy app bằng quyền Admin mà KHÔNG hỏi
+# (chỉ hỏi 1 lần lúc tạo tác vụ). Bấm đúp mở app (quyền thường) -> app nhờ tác vụ mở bản Admin rồi tự thoát.
+# Bật thêm "Khởi động cùng Windows" thì tác vụ có thêm lịch tự chạy khi đăng nhập.
 # Tạo bằng XML để bỏ 2 cài đặt mặc định của Windows: tự TẮT app sau 3 ngày chạy liên tục, không chạy khi laptop dùng pin.
 TASK_XML = '''<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>MiniKVM - dùng chung chuột + bàn phím cho nhiều máy</Description>
+    <Description>MiniKVM - mở bằng quyền Admin không cần hỏi lại</Description>
   </RegistrationInfo>
-  <Triggers>
-    <LogonTrigger>
-      <Enabled>true</Enabled>
-      <UserId>{user}</UserId>
-      <Delay>PT5S</Delay>
-    </LogonTrigger>
-  </Triggers>
+  <Triggers>{triggers}</Triggers>
   <Principals>
     <Principal id="Author">
       <UserId>{user}</UserId>
@@ -335,34 +363,55 @@ TASK_XML = '''<?xml version="1.0" encoding="UTF-16"?>
   </Actions>
 </Task>
 '''
+LOGON_XML = '''
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <UserId>{user}</UserId>
+      <Delay>PT5S</Delay>
+    </LogonTrigger>
+  '''
 
 
-def task_exists():
-    return IS_WIN and run_quiet(["schtasks", "/Query", "/TN", TASK_NAME]) == 0
+def task_query():
+    """-> None nếu chưa có tác vụ, không thì {"logon": có tự chạy khi đăng nhập, "new": tác vụ kiểu mới (--task)}"""
+    if not IS_WIN:
+        return None
+    try:
+        r = subprocess.run(["schtasks", "/Query", "/TN", TASK_NAME, "/XML"], capture_output=True,
+                           creationflags=CREATE_NO_WINDOW, timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    low = r.stdout.replace(b"\x00", b"").lower()   # (chỉ tìm chữ tiếng Anh: đúng cả khi Windows trả về UTF-16)
+    return {"logon": b"<logontrigger" in low, "new": b"--task" in low}
 
 
-def create_task():
-    """Tác vụ Task Scheduler: tự chạy bằng quyền Admin khi đăng nhập, không hỏi UAC. -> mã lỗi schtasks (0 = được)"""
+def create_task(logon):
+    """Tạo / ghi đè tác vụ (app phải đang có quyền Admin). -> (mã lỗi schtasks (0 = được), câu báo lỗi)"""
     import tempfile
     from xml.sax.saxutils import escape
-    xml = TASK_XML.format(user=escape(win_user()), cmd=escape(pythonw()),
-                          args=escape(f'"{os.path.abspath(__file__)}" --tray'), cwd=escape(HERE))
+    exe, args = app_launch("--task")
+    user = escape(win_user())
+    xml = TASK_XML.format(user=user, triggers=LOGON_XML.format(user=user) if logon else "", cmd=escape(exe),
+                          args=escape(args), cwd=escape(HERE))
     path = os.path.join(tempfile.gettempdir(), f"minikvm_task_{os.getpid()}.xml")
     try:
         with open(path, "w", encoding="utf-16") as f:
             f.write(xml)
-        rc = run_quiet(["schtasks", "/Create", "/F", "/TN", TASK_NAME, "/XML", path])
-    except OSError:
-        rc = -1
+        rc, msg = run_out(["schtasks", "/Create", "/F", "/TN", TASK_NAME, "/XML", path])
+    except OSError as e:
+        rc, msg = -1, str(e)
     finally:
         try:
             os.remove(path)
         except OSError:
             pass
-    if rc != 0:   # dự phòng: cách đơn giản (chịu 2 cài đặt mặc định ở trên)
-        rc = run_quiet(["schtasks", "/Create", "/F", "/TN", TASK_NAME, "/SC", "ONLOGON", "/RL", "HIGHEST",
-                        "/TR", autostart_cmd()])
-    return rc
+    if rc != 0 and logon:   # dự phòng: cách đơn giản (chịu 2 cài đặt mặc định ở trên)
+        if run_quiet(["schtasks", "/Create", "/F", "/TN", TASK_NAME, "/SC", "ONLOGON", "/RL", "HIGHEST",
+                      "/TR", f'"{exe}" {args}']) == 0:
+            return 0, ""
+    return rc, msg
 
 
 def run_key(value=None):
@@ -382,43 +431,80 @@ def run_key(value=None):
         return False
 
 
-def autostart_enabled():
+def run_key_value():
+    """Lệnh đang ghi trong mục Run (None = không bật khởi động cùng Windows kiểu quyền thường)."""
     if not IS_WIN:
-        return False
-    if task_exists():
-        return True
+        return None
     try:
         import winreg
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as k:
-            winreg.QueryValueEx(k, APP)
-        return True
+            return winreg.QueryValueEx(k, APP)[0]
     except OSError:
-        return False
+        return None
 
 
-def set_autostart(on):
-    """Bật: đang là Admin -> Task Scheduler (tự chạy bằng quyền Admin, không hỏi UAC); không -> mục Run của user.
-    -> (thành công?, câu báo)"""
+def apply_startup(always_admin, autostart):
+    """Áp dụng 2 ô "Luôn mở bằng quyền Admin" + "Khởi động cùng Windows". -> câu báo lỗi, hoặc None nếu được"""
     if not IS_WIN:
-        return False, "Chỉ dùng được trên Windows"
-    admin, task = is_admin(), task_exists()
-    if not on:
-        run_key(None)
-        if task and run_quiet(["schtasks", "/Delete", "/TN", TASK_NAME, "/F"]) != 0:
-            return False, "Không tắt được (tác vụ do quyền Admin tạo) - bấm \"Chạy lại bằng Admin\" rồi tắt lại"
-        return True, "Đã tắt"
-    if admin:
-        rc = create_task()
+        return "Chỉ dùng được trên Windows"
+    if always_admin:
+        if not is_admin():
+            return "Cần quyền Admin: bấm \"Chạy bằng Admin\" trước"
+        rc, msg = create_task(autostart)
         if rc != 0:
-            return False, f"Không tạo được tác vụ khởi động (schtasks lỗi {rc})"
-        run_key(None)
-        return True, "Đã bật: đăng nhập Windows là MiniKVM tự chạy (quyền Admin) dưới khay"
-    if task:
-        return True, "Đã bật sẵn (tự chạy bằng quyền Admin khi đăng nhập)"
-    if not run_key(autostart_cmd()):
-        return False, "Không ghi được registry"
-    return True, ("Đã bật (quyền thường). Muốn tự chạy bằng quyền Admin: bấm \"Chạy lại bằng Admin\" "
-                  "rồi tắt/bật lại ô này")
+            return f"Không tạo được tác vụ trong Task Scheduler (schtasks lỗi {rc}: {msg})"
+        run_key(None)   # tác vụ đã lo phần tự chạy khi đăng nhập (bằng quyền Admin)
+        return None
+    if task_query() is not None and run_quiet(["schtasks", "/Delete", "/TN", TASK_NAME, "/F"]) != 0:
+        return "Không xóa được tác vụ cũ (cần quyền Admin): bấm \"Chạy bằng Admin\" rồi làm lại"
+    if not run_key(autostart_cmd() if autostart else None):
+        return "Không ghi được registry"
+    return None
+
+
+def admin_task_ready(settings):
+    """Đã bật "Luôn mở bằng quyền Admin" cho đúng file app này (chuyển app sang thư mục khác thì phải bật lại)."""
+    return IS_WIN and settings.get("admin_task") == APP_FILE
+
+
+def handoff_to_admin(opts, ctl):
+    """Bấm đúp mở app (quyền thường) mà đã bật "Luôn mở bằng quyền Admin": nhờ tác vụ mở bản Admin (Windows không
+    hỏi gì), bản này thoát. -> "ok" | "no_task" (tác vụ đã bị xóa) | "timeout" (bản Admin không mở lên)"""
+    ctl.close()   # nhả cổng điều khiển cho bản Admin
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(HANDOFF_FILE, "w", encoding="utf-8") as f:
+            json.dump({"tray": opts.tray, "start": opts.start, "t": time.time()}, f)
+    except OSError:
+        pass
+    try:   # bản này là app người dùng vừa bấm mở -> cho phép cửa sổ bản Admin hiện lên trên cùng
+        ctypes.windll.user32.AllowSetForegroundWindow(-1)
+    except Exception:
+        pass
+    status = "no_task"
+    if run_quiet(["schtasks", "/Run", "/TN", TASK_NAME]) == 0:
+        status = "timeout"
+        t = time.monotonic() + 12
+        while time.monotonic() < t:
+            if send_command("ping"):
+                return "ok"
+            time.sleep(0.2)
+    try:
+        os.remove(HANDOFF_FILE)
+    except OSError:
+        pass
+    return status
+
+
+def read_handoff():
+    """(bản Admin do tác vụ mở) -> tùy chọn bản quyền thường gửi sang; None = Windows tự chạy lúc đăng nhập."""
+    try:
+        with open(HANDOFF_FILE, encoding="utf-8") as f:
+            d = json.load(f)
+        os.remove(HANDOFF_FILE)
+        return d if abs(time.time() - float(d["t"])) < 60 else None
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
 
 
 def open_firewall(port):
@@ -426,7 +512,7 @@ def open_firewall(port):
     if not IS_WIN:
         return False, "Chỉ dùng được trên Windows"
     if not is_admin():
-        return False, "Cần quyền Admin: bấm \"Chạy lại bằng Admin\" trước"
+        return False, "Cần quyền Admin: bấm \"Chạy bằng Admin\" trước"
     run_quiet(["netsh", "advfirewall", "firewall", "delete", "rule", f"name={APP}"])
     rc = run_quiet(["netsh", "advfirewall", "firewall", "add", "rule", f"name={APP}", "dir=in", "action=allow",
                     "protocol=TCP", f"localport={port}", "remoteip=localsubnet", "profile=any"])
@@ -438,8 +524,8 @@ def relaunch_as_admin(extra=""):
     if not IS_WIN:
         return False
     try:
-        r = ctypes.windll.shell32.ShellExecuteW(None, "runas", pythonw(), f'"{os.path.abspath(__file__)}" {extra}',
-                                                HERE, 1)
+        exe, args = app_launch(extra)
+        r = ctypes.windll.shell32.ShellExecuteW(None, "runas", exe, args, HERE, 1)
         return r > 32
     except Exception:
         return False
@@ -488,11 +574,12 @@ class Runner:
         return self.p is not None and self.p.poll() is None
 
     def start(self, role):
-        args = [python_exe(), "-u", KVM_PATH] + ([role] if role in ("master", "client") else []) + ["--gui"]
+        roles = [role] if role in ("master", "client") else []
+        args = [python_exe(), "-u", KVM_PATH] + roles + ["--gui"]
         env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
         self.stopping = False
         self.p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                  cwd=os.path.dirname(KVM_PATH) or HERE, env=env, creationflags=CREATE_NO_WINDOW)
+                                  cwd=HERE, env=env, creationflags=CREATE_NO_WINDOW)
         threading.Thread(target=self._read, args=(self.p,), daemon=True).start()
 
     def _read(self, p):
@@ -1192,6 +1279,7 @@ class App:
         self.auto_run = tk.BooleanVar(value=bool(self.settings.get("auto_run", True)))
         self.close_tray = tk.BooleanVar(value=bool(self.settings.get("close_to_tray", True)))
         self.autostart = tk.BooleanVar(value=False)
+        self.admin_mode = tk.BooleanVar(value=admin_task_ready(self.settings))   # "Luôn mở bằng quyền Admin"
         self.master_ip, self.c_port, self.c_settle = tk.StringVar(), tk.StringVar(), tk.StringVar()
         self._client_vars(force=True)
         self.tray = Tray(self)
@@ -1398,13 +1486,16 @@ class App:
         f.pack(fill="x", pady=(10, 0))
         self.lbl_info = ttk.Label(f)
         self.lbl_info.pack(side="left")
-        if self.admin:
-            ttk.Label(f, text="✓ Quyền Admin", style="Ok.TLabel").pack(side="right")
-        else:
-            self.btn_admin = ttk.Button(f, text="Chạy lại bằng Admin", command=self.run_as_admin)
+        self.cb_admin = self.btn_admin = None
+        if self.admin:   # đang có quyền Admin: tick ô này là lần sau mở app tự có quyền Admin, không hỏi nữa
+            self.cb_admin = ttk.Checkbutton(f, text="Luôn mở bằng quyền Admin (không hỏi lại)",
+                                            variable=self.admin_mode, command=self.on_admin_mode)
+            self.cb_admin.pack(side="right")
+            ttk.Label(f, text="✓ Quyền Admin", style="Ok.TLabel").pack(side="right", padx=(0, 16))
+        else:            # bấm 1 lần: Windows hỏi 1 lần, từ đó về sau mở app là tự có quyền Admin
+            self.btn_admin = ttk.Button(f, text="Chạy bằng Admin", command=self.run_as_admin)
             self.btn_admin.pack(side="right")
-            ttk.Label(f, text="Chưa có quyền Admin: không điều khiển được game/cửa sổ chạy bằng Admin",
-                      style="Warn.TLabel").pack(side="right", padx=8)
+            ttk.Label(f, text="⚠ Chưa có quyền Admin", style="Warn.TLabel").pack(side="right", padx=8)
 
     def _build_peers(self, main):
         s = self.scale
@@ -1915,31 +2006,109 @@ class App:
 
         threading.Thread(target=run, daemon=True).start()
 
-    def _check_autostart(self):
-        self._bg(autostart_enabled, lambda on: self.autostart.set(on is True))
+    def _set_admin_flag(self, on, by_user=False):
+        """Ghi nhớ "Luôn mở bằng quyền Admin" (bản quyền thường đọc cờ này để biết có nhờ tác vụ mở bản Admin).
+        by_user: người dùng tự bỏ tick -> nhớ để không tự bật lại."""
+        self.admin_mode.set(on)
+        st, old = self.settings, dict(self.settings)
+        if on:
+            st["admin_task"] = APP_FILE
+            st.pop("admin_off", None)
+        else:
+            st.pop("admin_task", None)
+            if by_user:
+                st["admin_off"] = True
+        if st != old:
+            self._save()
 
-    def on_autostart(self):
-        want = self.autostart.get()
-        self.cb_autostart.state(["disabled"])
+    def _check_autostart(self):
+        """Đọc trạng thái 2 ô từ Windows. Tác vụ của bản cũ / của app nằm chỗ khác (đã chuyển thư mục)
+        -> đang có quyền Admin thì ghi lại cho đúng app này, giữ nguyên lịch tự chạy khi đăng nhập."""
+        flag, admin = admin_task_ready(self.settings), self.admin
+
+        def work():
+            info = task_query()
+            mine = bool(info and info["new"] and flag)
+            if info and not mine and admin and create_task(info["logon"])[0] == 0:
+                mine = True
+            rv = run_key_value()
+            if rv is not None and rv != autostart_cmd():
+                run_key(autostart_cmd())
+            return mine, bool(info and info["logon"]) or rv is not None
 
         def done(res):
-            self.cb_autostart.state(["!disabled"])
-            ok, msg = res if isinstance(res, tuple) else (False, str(res))
-            if not ok:
-                self.autostart.set(not want)
-                messagebox.showwarning(APP, msg, parent=self.root)
-            self.log_gui(("[OK] " if ok else "[!] ") + "Khởi động cùng Windows: " + msg)
+            if not isinstance(res, tuple):
+                return
+            mine, auto = res
+            self.autostart.set(auto)
+            self._set_admin_flag(mine)
+            setup, self.opts.setup_admin = self.opts.setup_admin, False
+            if not self.admin:
+                return
+            if mine:
+                if setup:
+                    self.log_gui("[OK] Luôn mở bằng quyền Admin: đã bật, lần sau mở MiniKVM không hỏi nữa")
+            elif setup or not self.settings.get("admin_off"):
+                # đang có quyền Admin (bấm "Chạy bằng Admin" / chuột phải "Run as administrator"...) -> bật luôn
+                self.admin_mode.set(True)
+                self.on_admin_mode(quiet=not setup)
 
-        self._bg(lambda: set_autostart(want), done)
+        self._bg(work, done)
+
+    def on_admin_mode(self, quiet=False):
+        """Tick / bỏ tick "Luôn mở bằng quyền Admin". quiet: app tự bật -> lỗi chỉ ghi nhật ký, không hiện hộp báo."""
+        want, auto = self.admin_mode.get(), self.autostart.get()
+        if self.cb_admin is not None:
+            self.cb_admin.state(["disabled"])
+
+        def done(err):
+            if self.cb_admin is not None:
+                self.cb_admin.state(["!disabled"])
+            if err is None:
+                self._set_admin_flag(want, by_user=True)
+                self.log_gui("[OK] " + ("Luôn mở bằng quyền Admin: đã bật, từ giờ mở MiniKVM tự có quyền Admin, "
+                                        "Windows không hỏi nữa (bỏ tick ô này nếu không muốn)" if want
+                                        else "Đã tắt \"Luôn mở bằng quyền Admin\""))
+                return
+            self.admin_mode.set(not want)
+            if not quiet:
+                messagebox.showwarning(APP, str(err), parent=self.root)
+            self.log_gui("[!] Luôn mở bằng quyền Admin: " + str(err))
+
+        self._bg(lambda: apply_startup(want, auto), done)
+
+    def on_autostart(self):
+        want, always = self.autostart.get(), self.admin_mode.get()
+        if always and not self.admin:
+            self.autostart.set(not want)
+            messagebox.showwarning(APP, "App đang chạy quyền thường nên chưa đổi được.\n"
+                                        "Bấm \"Chạy bằng Admin\" rồi làm lại.", parent=self.root)
+            return
+        self.cb_autostart.state(["disabled"])
+
+        def done(err):
+            self.cb_autostart.state(["!disabled"])
+            if err is None:
+                self.log_gui("[OK] Khởi động cùng Windows: " + (
+                    ("bật - đăng nhập Windows là MiniKVM tự chạy dưới khay" + (" (quyền Admin)" if always else
+                                                                                " (quyền thường)")) if want
+                    else "tắt"))
+                return
+            self.autostart.set(not want)
+            messagebox.showwarning(APP, str(err), parent=self.root)
+            self.log_gui("[!] Khởi động cùng Windows: " + str(err))
+
+        self._bg(lambda: apply_startup(always, want), done)
 
     def run_as_admin(self):
-        extra = "--replace" + (" --start" if self.runner.running else "")
+        """Mở lại bằng quyền Admin (Windows hỏi 1 lần) + tự bật "Luôn mở bằng quyền Admin" -> lần sau không hỏi."""
+        extra = "--replace --setup-admin" + (" --start" if self.runner.running else "")
         self.btn_admin.state(["disabled"])
 
         def done(ok):
             self.btn_admin.state(["!disabled"])
             if ok is True:
-                self.log_gui("[GUI] Đang mở lại MiniKVM bằng quyền Admin…")
+                self.log_gui("[GUI] Đang mở lại MiniKVM bằng quyền Admin (Windows chỉ hỏi lần này)…")
             else:
                 self.log_gui("[!] Không mở được bằng quyền Admin (đã bấm \"Không\" ở hộp thoại của Windows?)")
 
@@ -2088,10 +2257,16 @@ class App:
             self.log_gui(f"[!] Cấu hình lỗi: {self.cfg_err}")
         if not self.tray.ok:
             self.log_gui(f"[GUI] Không có biểu tượng khay ({getattr(self.tray, 'why', '?')})")
+        if self.opts.handoff == "no_task":   # tác vụ "Luôn mở bằng quyền Admin" đã bị xóa (vd trong Task Scheduler)
+            self._set_admin_flag(False)
+            self.log_gui("[!] Không thấy tác vụ \"Luôn mở bằng quyền Admin\" (đã bị xóa?) - đang chạy quyền thường")
+        elif self.opts.handoff == "timeout":
+            self.log_gui("[!] Mở bản quyền Admin không được - đang chạy quyền thường")
+        if not self.admin:
+            self.log_gui("[!] Chưa có quyền Admin: không điều khiển được game/cửa sổ đang chạy bằng quyền Admin. "
+                         "Bấm \"Chạy bằng Admin\" (Windows chỉ hỏi 1 lần, lần sau tự có quyền Admin)")
         if not self.opts.tray:
-            self.root.deiconify()
-            if self.ask_legacy:
-                self.root.after(700, self._ask_delete_legacy)
+            self.show()   # (bản Admin do tác vụ mở: đưa cửa sổ lên trên cùng, không bị nằm dưới cửa sổ khác)
         elif not self.tray.ok:
             self.root.iconify()
         self._poll_id = self.root.after(40, self._poll)
@@ -2101,7 +2276,9 @@ class App:
         if IS_WIN:
             self._check_autostart()
         else:
-            self.cb_autostart.state(["disabled"])
+            for cb in (self.cb_autostart, self.cb_admin):
+                if cb is not None:
+                    cb.state(["disabled"])
         self.root.mainloop()
 
 
@@ -2118,7 +2295,14 @@ def fatal(msg):
 
 def main():
     args = [a.lower() for a in sys.argv[1:]]
-    opts = types.SimpleNamespace(tray="--tray" in args, start="--start" in args, replace="--replace" in args)
+    opts = types.SimpleNamespace(tray="--tray" in args, start="--start" in args, replace="--replace" in args,
+                                 task="--task" in args, setup_admin="--setup-admin" in args, handoff=None)
+    if opts.task:   # bản Admin do tác vụ "Luôn mở bằng quyền Admin" mở
+        h = read_handoff()
+        if h is None:   # Windows tự chạy lúc đăng nhập -> ẩn dưới khay, tự bật kvm
+            opts.tray = True
+        else:           # bản quyền thường vừa nhờ mở -> giữ đúng tùy chọn của nó
+            opts.tray, opts.start = bool(h.get("tray")), bool(h.get("start"))
     hide_own_console()
     if IS_WIN:
         try:   # biểu tượng trên taskbar là của MiniKVM, không bị gộp chung với Python
@@ -2142,6 +2326,12 @@ def main():
                 time.sleep(0.25)
         elif send_command("ping" if opts.tray else "show"):
             return   # đã có MiniKVM đang chạy -> hiện cửa sổ của nó rồi thoát
+    elif not (opts.task or opts.replace) and admin_task_ready(load_settings()) and not is_admin():
+        opts.handoff = handoff_to_admin(opts, ctl)   # đã bật "Luôn mở bằng quyền Admin" -> mở bản Admin, không hỏi
+        if opts.handoff == "ok":
+            return
+        if not ctl.listen() and send_command("ping" if opts.tray else "show"):
+            return   # bản Admin mở lên trễ -> dùng luôn bản đó
     App(opts, q, ctl).run()
 
 
