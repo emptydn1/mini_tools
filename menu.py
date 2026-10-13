@@ -88,28 +88,10 @@ def menu_mumuplayer():
     run_menu("TOOLS MUMUPLAYER", menu)
 
 
-def menu_sync_mouse_keyboard():
-    file_path = Path(__file__).parent / "mumu_tool" / "tool_game" / "kvm.py"
-    CREATE_NEW_CONSOLE = 0x00000010
-
-    def start(role):
-        if not file_path.exists():
-            print(f"Không tìm thấy {file_path}")
-            return
-        subprocess.Popen([sys.executable, str(file_path), role], creationflags=CREATE_NEW_CONSOLE)
-
-    menu = {
-        "1": ("MASTER", lambda: start("master")),
-        "2": ("CLIENT", lambda: start("client")),
-    }
-    run_menu("Sync Mouse Keyboard", menu)
-
-
 main_menu = {
     "1": ("tools mumuplayer", menu_mumuplayer),
     "2": ("kiem hiep tinh 1", menu_kiemhieptinh1),
     "3": ("auto click", auto_click),
     "4": ("auto luom", auto_luom),
-    "5": ("đồng bộ chuột bàn phím", menu_sync_mouse_keyboard),
-    "6": ("test click", test_click),
+    "5": ("test click", test_click),
 }

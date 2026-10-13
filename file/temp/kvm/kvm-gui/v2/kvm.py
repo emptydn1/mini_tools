@@ -708,7 +708,7 @@ FMT = {T_MOVE: struct.Struct("<ii"), T_BTN: struct.Struct("<BB"), T_WHEEL: struc
        T_RMOVE: struct.Struct("<ii"),     # CHUYỂN MÁY: chuyển động gốc của chuột (raw), client tự tính tốc độ
        T_MFEEL: struct.Struct("<Biii")}   # CHUYỂN MÁY: cài đặt chuột của master (tốc độ, ngưỡng 1, ngưỡng 2, gia tốc)
 VERSION = 5           # master + client phải CÙNG bản (khác bản: master không điều khiển máy đó, chỉ báo trong nhật ký)
-BUILD = "13/10d"      # ngày sửa file (hiện ở dòng đầu nhật ký): xem máy đang chạy đúng file mới chưa
+BUILD = "13/10e"      # ngày sửa file (hiện ở dòng đầu nhật ký): xem máy đang chạy đúng file mới chưa
 CHUNK = 64 * 1024     # clipboard lớn được cắt nhỏ, chen giữa các sự kiện chuột
 TIMEOUT = 5.0         # không nhận được gì trong 5s -> coi như mất kết nối
 PING_EVERY = 1.0      # master ping mỗi 1s (kể cả khi đang di chuột), client trả lời PONG
@@ -989,11 +989,13 @@ class Master:
         if m.usFlags & MOUSE_MOVE_ABSOLUTE:
             self._raw_off("chuột báo tọa độ tuyệt đối (bút vẽ, máy ảo, Remote Desktop...)")
             return
+        if not (m.lLastX or m.lLastY):   # không di (chỉ bấm nút / kvm tự "di" 0 pixel để ẩn con trỏ): bỏ qua
+            return
         self.raw_wait = [0, 0, 0]
         if self.raw is None:
             self.raw = True
             log("[CHUỘT] Dùng chuyển động chuột gốc: máy kia tự tính tốc độ như chuột cắm thẳng vào nó")
-        if (m.lLastX or m.lLastY) and act.link:
+        if act.link:
             act.link.send((T_RMOVE, m.lLastX, m.lLastY))
 
     def _wait_raw(self, dx, dy):
@@ -1093,20 +1095,30 @@ class Master:
         self._title()
 
     # ---------- ẩn con trỏ master (cách Deskflow làm) ----------
-    def _make_hider(self):
-        """Cửa sổ 16x16 gần như trong suốt, nằm ngay dưới chỗ đỗ con trỏ, dùng con trỏ rỗng.
-        Con trỏ nằm trên cửa sổ này -> không thấy. Thoát chương trình là cửa sổ mất -> chuột hiện lại."""
-        hinst = kernel32.GetModuleHandleW(None)
-        self._blank = user32.CreateCursor(hinst, 0, 0, 32, 32, (ctypes.c_ubyte * 128)(*([0xFF] * 128)),
-                                          (ctypes.c_ubyte * 128)())
+    # Windows hiện con trỏ theo thread sở hữu cửa sổ nằm dưới con trỏ / cửa sổ đang được chọn. Đang điều khiển máy
+    # khác thì cả 2 đều là cửa sổ của kvm (cửa sổ che + cửa sổ giữ focus) -> thread nào cũng phải ẩn con trỏ:
+    # dùng con trỏ rỗng + ShowCursor(False) ở ĐÚNG thread sở hữu cửa sổ (cách Deskflow làm).
+    @staticmethod
+    def _blank_cursor():
+        """Con trỏ rỗng 32x32 (mặt nạ AND toàn 1, XOR toàn 0 = trong suốt)."""
+        return user32.CreateCursor(kernel32.GetModuleHandleW(None), 0, 0, 32, 32,
+                                   (ctypes.c_ubyte * 128)(*([0xFF] * 128)), (ctypes.c_ubyte * 128)())
 
+    def _cursor_proc(self):
+        """Thủ tục cửa sổ của kvm: con trỏ nằm trên cửa sổ -> con trỏ rỗng (khi ẩn con trỏ master)."""
         def wndproc(hwnd, msg, wp, lp):
-            if msg == WM_SETCURSOR:
+            if msg == WM_SETCURSOR and self._blank:
                 user32.SetCursor(self._blank)
                 return 1
             return user32.DefWindowProcW(hwnd, msg, wp, lp)
 
-        self._wndproc = WNDPROC(wndproc)
+        return WNDPROC(wndproc)
+
+    def _make_hider(self):
+        """Cửa sổ 16x16 gần như trong suốt, nằm ngay dưới chỗ đỗ con trỏ, dùng con trỏ rỗng.
+        Con trỏ nằm trên cửa sổ này -> không thấy. Thoát chương trình là cửa sổ mất -> chuột hiện lại."""
+        hinst = kernel32.GetModuleHandleW(None)
+        self._wndproc = self._cursor_proc()
         wc = WNDCLASSW(lpfnWndProc=self._wndproc, hInstance=hinst, hCursor=self._blank,
                        lpszClassName="MiniKVMHide")
         user32.RegisterClassW(ctypes.byref(wc))
@@ -1185,14 +1197,16 @@ class Master:
         """Thread giữ focus: sở hữu cửa sổ 1x1 "MiniKVMFocus", nhận lệnh lấy/trả focus."""
         self.focus_tid = kernel32.GetCurrentThreadId()
         hinst = kernel32.GetModuleHandleW(None)
-        self._fproc = WNDPROC(lambda h, m, w, lp: user32.DefWindowProcW(h, m, w, lp))
-        wc = WNDCLASSW(lpfnWndProc=self._fproc, hInstance=hinst, lpszClassName="MiniKVMFocus")
+        self._fproc = self._cursor_proc()
+        wc = WNDCLASSW(lpfnWndProc=self._fproc, hInstance=hinst, hCursor=self._blank, lpszClassName="MiniKVMFocus")
         user32.RegisterClassW(ctypes.byref(wc))
         # TOOLWINDOW (không hiện ở taskbar / Alt+Tab) | LAYERED, kiểu POPUP. KHÔNG NOACTIVATE: phải nhận được focus
         self._focus_wnd = user32.CreateWindowExW(0x00080080, "MiniKVMFocus", None, 0x80000000,
                                                  0, 0, 1, 1, None, None, hinst, None)
         if self._focus_wnd:
             user32.SetLayeredWindowAttributes(self._focus_wnd, 0, 1, 2)   # độ đậm 1/255: mắt không thấy
+            if self._blank:   # cửa sổ này thành cửa sổ chính lúc ở máy khác -> thread này cũng phải ẩn con trỏ
+                user32.ShowCursor(False)
         if self.active is not None:   # (vừa sang máy khác trước khi thread này chạy kịp)
             self._take_focus()
         msg = wt.MSG()
@@ -1233,6 +1247,20 @@ class Master:
             return
         x, y = self.screen.park
         user32.SetWindowPos(w, None, x, y, 1, 1, 0x0010 | 0x0040)   # NOACTIVATE | SHOWWINDOW: "đang ở máy khác"
+        try:
+            self._steal_focus(w)
+        finally:
+            self._refresh_cursor()
+
+    def _refresh_cursor(self):
+        """Bắt Windows xét lại con trỏ ở chỗ đỗ: "di" chuột 0 pixel -> cửa sổ che nhận WM_SETCURSOR -> con trỏ rỗng.
+        Cần khi rê chuột NHANH qua máy khác: thread hook đang bận xử lý dồn dập nên Windows đổi focus trước khi kịp
+        ẩn con trỏ -> giữ con trỏ của ứng dụng cũ; mọi lần di chuột sau đó đều bị kvm chặn nên không tự ẩn lại."""
+        if self._blank and self.active is not None:
+            user32.SetCursor(self._blank)
+            send_inputs(mouse_input(MOUSEEVENTF_MOVE))
+
+    def _steal_focus(self, w):
         # Phím nhấn ở master mà còn đang giữ: phím NHẢ phải tới được ứng dụng ở master (không thì ứng dụng tưởng
         # phím vẫn giữ, vd nhân vật cứ đi mãi) -> nhả hết rồi mới lấy focus (_on_key gọi lại)
         if self._master_keys_held():
@@ -1719,6 +1747,8 @@ class Master:
         if LOCK_KEY:
             log(f"[KHÓA] bấm {key_name(LOCK_KEY)} để khóa/mở khóa chuột ở máy đang dùng")
         EXIT_HOOKS.append(self._exit_focus)   # (giao diện bấm Dừng/Thoát lúc đang ở máy khác)
+        if HIDE_MASTER_CURSOR:
+            self._blank = self._blank_cursor()
         threading.Thread(target=self._focus_loop, name="focus", daemon=True).start()
         threading.Thread(target=self._hook_loop, name="hook", daemon=True).start()
         threading.Thread(target=self._watch_loop, name="watch", daemon=True).start()
