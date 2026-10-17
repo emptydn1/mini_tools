@@ -33,7 +33,7 @@ def openAllmumuplayer():
     for index in indexes:
         print(f"Đang mở emulator index {index} ...")
         subprocess.run([MUMU_PATH, "control", "-v", index, "launch"])
-        time.sleep(25)
+        time.sleep(22)
 
     check_shells_created()
     for port in devices.values():
