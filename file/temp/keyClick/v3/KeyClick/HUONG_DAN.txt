@@ -1,0 +1,203 @@
+﻿KeyClick 1.9.1 – Bấm phím thay chuột (dùng cho mọi tựa game)
+=============================================================
+
+CÀI ĐẶT (làm 1 lần)
+  1. Cài Python 3.8 trở lên: https://www.python.org/downloads/
+     Lúc cài nhớ tick "Add python.exe to PATH". tkinter có sẵn, không cần cài thêm gì.
+  2. Giải nén thư mục KeyClick ra chỗ bất kỳ.
+
+CHẠY
+  - Nháy đúp KeyClick.pyw (hoặc chay_KeyClick.bat).
+  - Muốn có file .exe (chạy không cần Python): nháy đúp build_exe.bat, đợi chạy xong,
+    file nằm ở dist\KeyClick.exe
+
+CÁCH DÙNG NHANH
+  1. Bấm "Thêm nút" → nút tròn hiện giữa màn hình, có dấu nháy nhấp nháy.
+  2. Nhấn 1 phím (ví dụ A) → nút hiện chữ A.
+  3. Kéo nút tròn tới chỗ cần click trong game.
+  4. Nhấn F8 (hoặc bấm công tắc to ở đầu cửa sổ) → từ giờ nhấn A = click ngay tâm nút tròn.
+  5. Muốn chỉnh lại: nhấn F8 để tắt → kéo/sửa → nhấn F8 bật lại.
+
+CỬA SỔ KEYCLICK (giao diện mới, nền tối)
+  - Thẻ trạng thái ở trên cùng:
+      • Công tắc to: bật / tắt phím tắt (giống F8). Xanh lá = ĐANG BẬT, xám = ĐANG TẮT.
+      • Dòng chữ nhỏ cho biết đang làm gì: "2 combo đang chạy · Esc để dừng hết",
+        "ĐANG CHỜ PHÍM" (vàng) khi đang gán phím, "ĐANG GÕ CHỮ" khi con trỏ ở ô Tên…
+  - 3 tab: "Nút bấm", "Combo" (số bên cạnh = số combo), "Cài đặt".
+  - Dòng thông báo ở cuối cửa sổ: bình thường là mẹo của tab đang mở; khi có chuyện cần
+    biết thì đổi màu: xanh lá = xong, vàng = chú ý, đỏ = lỗi. Tự trở lại sau vài giây.
+  - Cửa sổ luôn giữ nguyên kích thước: chữ đổi mà cửa sổ không nhảy. Chữ dài quá thì
+    được cắt bằng "…". Danh sách dài thì có thanh cuộn mảnh bên phải (lăn chuột để cuộn).
+  - Màn hình thấp (laptop 1366×768, hoặc Scale 150%): cửa sổ tự thấp lại, tab nào
+    không đủ chỗ thì cuộn được.
+  - Windows 10/11: thanh tiêu đề cũng tối màu cho đồng bộ.
+
+TAB "NÚT BẤM"
+  - "Thêm nút" / "Thêm nút vuốt": tạo nút tròn mới (nút mới chờ bạn nhấn phím để gán).
+  - Danh sách NÚT TRÊN MÀN HÌNH: mỗi dòng là 1 nút tròn:
+      • Ô tròn trắng = phím của nút (chữ đen = chuột trái, cam = chuột phải,
+        tím = chuột giữa). Ô nét đứt "?" = nút chưa gán phím.
+      • Dòng chữ: kiểu click, ví dụ "Click chuột trái – Nhấn A = click 1 lần".
+      • Nhãn GIỮ / TURBO / VUỐT = kiểu nút.
+      • Bút chì: gán (đổi) phím cho nút. Bấm lần nữa để huỷ.
+      • ⋯ : menu của nút (giống chuột phải vào nút tròn).
+      • Bấm vào dòng: nút tròn đó nháy xanh 2 lần trên màn hình – để biết nút nào.
+  - BỘ PHÍM (cả 3 nút đều tính cả nút tròn LẪN combo):
+      • "Lưu…": lưu ra file (vd bo_phim.json) – gồm mọi nút tròn và mọi combo (các bước,
+        thời gian chờ, phím chạy, số lần lặp, công tắc F9 / khoá phím).
+      • "Mở bộ phím…": mở lại file đó – nút và combo trở lại y như lúc lưu.
+      • "Xoá hết": xoá mọi nút tròn VÀ mọi combo (hỏi lại trước khi xoá), chỉ còn 1
+        combo trống "Combo 1". Muốn giữ lại thì bấm "Lưu…" trước.
+
+THAO TÁC VỚI NÚT TRÒN (khi đang TẮT phím tắt)
+  - Bấm vào nút ............ gán lại phím (Esc: huỷ)
+  - Kéo giữa nút ........... di chuyển
+  - Kéo MÉP nút ............ phóng to / thu nhỏ (con trỏ thành mũi tên chéo khi ở mép;
+                             kéo ra ngoài = to hơn, kéo vào trong = nhỏ hơn, tâm nút đứng yên)
+  - Lăn chuột trên nút ..... phóng to / thu nhỏ
+  - Ctrl + kéo ............. nhân bản (bản sao hiện dấu nháy để gõ phím mới)
+  - Chuột phải ............. Gán phím / Nhân bản / click chuột trái-phải-giữa / chế độ /
+                             tốc độ turbo / thời gian vuốt / to hơn - nhỏ hơn / bỏ gán phím /
+                             xoá nút
+  - Nút tròn màu trắng dịu, mép tròn mịn, có viền xám mảnh (thấy rõ cả trên nền sáng).
+    Nền vàng nhạt + dấu nháy = đang chờ gán phím. Bấm phím: nút nháy xanh.
+  - 1 phím chỉ dùng cho 1 nút: gán phím đã dùng cho nút khác thì phím đó tự chuyển sang
+    nút mới (dòng thông báo cho biết).
+
+4 CHẾ ĐỘ (chuột phải vào nút, hoặc nút ⋯ trong tab Nút bấm)
+  - Nhấn phím = click 1 lần (mặc định).
+  - Giữ phím = giữ chuột: game cần nhấn giữ, kéo, ngắm skill (giả lập LDPlayer, MuMu…).
+    Đang giữ phím mà rê chuột thật thì sẽ thành kéo.
+  - Giữ phím = click liên tục (turbo): chỉnh tốc độ ở tab Cài đặt (hoặc trong menu).
+  - Nhấn phím = vuốt: xem mục NÚT VUỐT.
+
+NÚT VUỐT (swipe)
+  - Bấm "Thêm nút vuốt" (hoặc chuột phải vào nút có sẵn → "Nhấn phím = vuốt").
+    Nút có thêm mũi tên vàng và CHẤM VÀNG = điểm đích. Kéo chấm vàng tới chỗ cần vuốt tới.
+    Trong tab Nút bấm, dòng của nút ghi luôn hướng vuốt (vd "Vuốt sang phải").
+  - Nhấn nhanh phím: chuột nhấn tại nút → kéo mượt tới chấm vàng → thả (vuốt/lướt).
+  - Giữ phím: vuốt tới chấm vàng rồi GIỮ luôn ở đó, thả phím mới nhả chuột
+    (kiểu đẩy joystick, kéo và giữ).
+  - Thời gian vuốt: chuột phải → "Thời gian vuốt" (100 ms = vuốt nhanh … 1200 ms = kéo chậm).
+  - Kéo nút thì chấm vàng đi theo, giữ nguyên hướng vuốt. Mũi tên và chấm vàng chỉ hiện
+    khi đang chỉnh nút (phím tắt TẮT), lúc chơi sẽ ẩn cho đỡ vướng.
+  - Nút vuốt dùng được trong combo (vuốt xong mới tính thời gian chờ).
+
+TAB "COMBO" – nhiều combo, chạy CÙNG LÚC được
+  Danh sách COMBO (ở trên):
+  - Mỗi dòng: tên combo, các bước (vd [A] 200 ms [S]), phím chạy riêng (nếu có),
+    nhãn F9 (combo chạy khi nhấn F9), ổ khoá (khoá phím khi chạy).
+  - Chấm xanh có quầng = combo đang chạy, kèm "đang chạy" hoặc "vòng 12 / ∞".
+  - Nút ▶ ở cuối dòng: chạy riêng combo đó (để thử). Đang chạy thì thành ■ = dừng.
+  - Bấm vào 1 dòng để chọn combo đó và sửa ở khung bên dưới.
+  - "Combo mới": thêm combo. "Xoá combo": xoá combo đang chọn.
+
+  Khung SỬA COMBO ĐANG CHỌN:
+  - Tên: đặt tên cho dễ nhớ.
+  - Phím: phím chạy riêng (không bắt buộc). "Gán"/"Đổi" rồi nhấn phím (Esc: huỷ),
+    "Bỏ" = combo không có phím riêng.
+  - Các bước: số thứ tự, nút, kiểu click, "chờ … ms", ▲ ▼ đổi thứ tự, ✕ bỏ bước.
+      • "chờ" = thời gian chờ trước khi chạy bước tiếp theo (1000 ms = 1 giây).
+        Ví dụ combo Q:   Q ▸ U – 100 ms – I – 200 ms – O
+      • Ô số: gõ số, hoặc phím ↑ ↓ để tăng / giảm.
+      • "Thêm bước" → chọn nút (thêm lần lượt theo thứ tự, 1 nút dùng được nhiều lần).
+        "Tất cả nút có phím" thêm hết các nút đã gán phím.
+  - Lặp: số lần chạy cả combo. Công tắc "Lặp mãi" = chạy tới khi dừng.
+  - Công tắc "Chạy khi nhấn F9" (mặc định bật).
+  - Công tắc "Khoá phím A, S… khi chạy" (mặc định bật) – xem mục KHOÁ PHÍM.
+  - Ở dưới cùng: "Chạy các combo F9" (= nhấn F9) và "Dừng hết" (= nhấn Esc).
+
+  DÙNG 2, 3, 4 COMBO CÙNG LÚC
+  - Cách 1 – bằng F9 (không tốn phím nào khác):
+      • Combo nào bật "Chạy khi nhấn F9" thì nhấn F9 là TẤT CẢ các combo đó chạy cùng lúc.
+        Nhấn F9 lần nữa hoặc Esc: dừng hết.
+      • Không muốn combo nào chạy theo F9 thì tắt công tắc đó ở combo ấy.
+  - Cách 2 – mỗi combo 1 phím riêng (vd Q, W, E, R):
+      • Nhấn phím của combo nào thì combo đó chạy; các combo đang chạy khác vẫn chạy tiếp.
+      • Combo có lặp: nhấn lại phím của nó để dừng riêng combo đó.
+      • Lặp 1 lần: nhấn là chạy hết combo; bước cuối không chờ nên combo xong ngay.
+        Nhấn lại trong lúc combo đó đang chạy thì bỏ qua.
+  - Esc: dừng TẤT CẢ combo đang chạy.
+  - Chỉ có 1 con chuột nên các cú click của các combo được xếp lần lượt: combo nào tới
+    lượt thì click. Combo có nút "giữ" đang giữ chuột mà combo khác cần click thì chuột
+    được nhả ra trước rồi mới click.
+
+  PHÍM CHẠY & PHÍM CỦA NÚT
+  - Phím của nút tròn luôn để click: combo KHÔNG lấy được phím đang dùng cho nút.
+    Lúc gán mà nhấn phím đó thì KeyClick báo và chờ phím khác (Esc: huỷ). Muốn dùng phím
+    đó cho combo thì bỏ gán phím ở nút trước (⋯ hoặc chuột phải → "Bỏ gán phím").
+  - Gán cho nút một phím đang là phím chạy của combo: phím chuyển sang nút, combo đó
+    thành không có phím. Gán cho combo phím đang thuộc combo khác: phím chuyển sang
+    combo mới.
+  - Combo không có phím riêng và tắt "Chạy khi nhấn F9" thì chỉ chạy bằng nút ▶ (dòng
+    combo ghi rõ).
+
+  KHOÁ PHÍM KHI COMBO ĐANG CHẠY (mặc định bật ở mọi combo)
+  - Bật: trong lúc combo đang chạy, phím của các nút có trong combo (vd combo A – S thì
+    A và S) bị khoá – bấm tay không click (nút nháy đỏ). Combo xong / dừng là bấm tay lại
+    bình thường. Phím của nút KHÔNG có trong combo vẫn bấm tay được.
+  - Tắt: đang chạy combo vẫn bấm tay được mọi phím đã gán.
+  - Nhiều combo cùng chạy: khoá phím của tất cả các combo đó (combo nào bật khoá).
+
+  KHÁC
+  - Nút "giữ" giữ chuột suốt thời gian chờ; nút "turbo" click liên tục suốt thời gian chờ;
+    nút vuốt thì vuốt xong mới tính thời gian chờ.
+  - Combo được lưu cùng bộ phím. Script của bản cũ (1.2–1.3) tự chuyển thành "Combo 1".
+
+TAB "CÀI ĐẶT"
+  - Độ đậm nền nút (5%–100%, mặc định 90%): nền trắng của nút trong hơn / đậm hơn.
+    Ô bên cạnh xem trước nút trên nền game. Chữ trên nút luôn rõ nét.
+    Khi đang BẬT phím tắt, cả nút mờ thêm một chút cho đỡ che game.
+  - Hiện các nút trên màn hình: tắt = ẩn nút, phím vẫn click được.
+  - Trả chuột về vị trí cũ sau khi click.
+  - Tốc độ turbo: số ms giữa 2 cú click (100 ms = 10 lần/giây; 30–5000 ms).
+  - Phím tắt: F8 bật / tắt, F9 chạy combo, Esc dừng combo.
+  - Quyền Admin: nút "Chạy lại bằng quyền Admin" và công tắc "Luôn chạy Admin".
+
+KHI ĐANG BẬT PHÍM TẮT
+  - Phím đã gán LUÔN click, dù cửa sổ nào đang ở phía trước: game, ứng dụng khác đang
+    phóng to, hay chính cửa sổ KeyClick (vừa bấm nút, đổi tab…).
+  - Chỉ khi đang gõ trong ô Tên của KeyClick thì phím tạm không click (thẻ trạng thái báo
+    "ĐANG GÕ CHỮ"); bấm ra chỗ khác, nhấn Enter hoặc F8 là click lại ngay.
+    Trong ô số (ms, Lặp, turbo) chỉ phím số dùng để gõ, các phím khác (A, S…) vẫn click.
+  - App luôn mở lên ở trạng thái TẮT cho an toàn.
+
+LƯU / MỞ BỘ PHÍM
+  - Mọi thay đổi tự lưu, tắt app mở lại vẫn còn nguyên.
+  - Mỗi game một bộ phím: "Lưu…" ra file .json (vd bo_phim.json), lần sau bấm
+    "Mở bộ phím…". File bộ phím chứa CẢ nút tròn LẪN combo; lưu xong dòng thông báo
+    cho biết đã lưu bao nhiêu nút, bao nhiêu combo.
+  - Mở bộ phím thì nút và combo trong file thay cho nút và combo đang có.
+
+LƯU Ý
+  - Game / giả lập chạy bằng quyền Admin thì KeyClick cũng phải chạy Admin, nếu không
+    Windows sẽ chặn hết: nhấn A không click, F8 cũng không ăn. Khi bạn chuyển sang cửa sổ
+    như vậy, KeyClick hiện cảnh báo đỏ ở đầu màn hình. Cách sửa: vào tab Cài đặt, bấm
+    "Chạy lại bằng quyền Admin", hoặc bật "Luôn chạy Admin" để lần nào mở cũng tự xin
+    quyền (Windows hỏi Yes/No – bấm Yes).
+  - KeyClick tự cài lại bộ bắt phím mỗi khi bạn đổi sang cửa sổ khác (và 5 giây một lần),
+    nên chuyển qua lại, phóng to / thu nhỏ cửa sổ khác thì phím vẫn hoạt động.
+  - Nên để game ở chế độ cửa sổ hoặc "Borderless / Fullscreen Windowed". Game Fullscreen
+    độc quyền sẽ che mất nút tròn (vẫn click được nếu độ phân giải không đổi).
+  - Vị trí nút là vị trí trên màn hình: đặt nút xong thì đừng di chuyển / đổi cỡ cửa sổ game.
+    Phóng to cửa sổ game thì hình trong game dời chỗ: nhấn F8 tắt, kéo nút cho khớp lại.
+  - Game có anti-cheat có thể chặn click giả lập, và một số game online cấm macro/auto-click.
+    Hãy xem luật của game trước khi dùng chế độ turbo.
+  - Đang bật Unikey/EVKey mà bấm phím bị lạ thì chuyển bộ gõ sang tiếng Anh (E) khi chơi.
+  - Windows Defender có thể cảnh báo nhầm file .exe tự build (do có hook bàn phím).
+    Khi đó dùng thẳng file KeyClick.pyw là được.
+
+TUỲ CHỈNH NÂNG CAO
+  File: %APPDATA%\KeyClick\config.json (sửa khi đã tắt KeyClick)
+  - toggle_key ........ phím bật/tắt, mã phím ảo Windows (119 = F8, 120 = F9, 121 = F10…)
+  - script_key ........ phím chạy / dừng các combo có bật "Chạy khi nhấn F9"
+                        (mặc định 120 = F9)
+  - click_hold_ms ..... thời gian giữ chuột mỗi lần click (mặc định 40)
+  - move_settle_ms .... chờ sau khi đưa chuột tới rồi mới click (mặc định 10).
+                        Game không nhận click thì tăng lên 30–50.
+  - bg_alpha .......... độ đậm nền nút (0.05–1.0, mặc định 0.9) – giống thanh trượt
+  - play_dim .......... khi đang chơi nút mờ thêm: nhân độ đậm với số này (mặc định 0.85;
+                        1.0 = không mờ thêm)
+  - button_size ....... cỡ nút mới tính bằng pixel (0 = tự chọn)
+  - run_as_admin ...... true = luôn chạy bằng quyền Admin (giống công tắc)
+  Nhật ký lỗi: %APPDATA%\KeyClick\keyclick.log
