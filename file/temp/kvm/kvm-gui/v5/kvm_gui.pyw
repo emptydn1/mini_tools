@@ -66,10 +66,9 @@ GREY = "#8a8a8a"
 ROLE_NAME = {"master": "máy chủ", "client": "máy khách"}
 
 # ------------------------------- cấu hình kvm (%APPDATA%\MiniKVM\config.json) -------------------------------
-CFG_KEYS = ("ipTable", "MASTER_IP", "SYNC_IPS", "PAUSED_IPS", "PORT", "CLICK_SETTLE", "RAW_MOUSE",
-            "MOUSE_LIKE_MASTER")
-BASE_CFG = {"ipTable": [[None, "MASTER", None]], "MASTER_IP": None, "SYNC_IPS": None, "PAUSED_IPS": [],
-            "PORT": 24900, "CLICK_SETTLE": 0.008, "RAW_MOUSE": False, "MOUSE_LIKE_MASTER": True}
+CFG_KEYS = ("ipTable", "MASTER_IP", "SYNC_IPS", "PORT", "CLICK_SETTLE", "RAW_MOUSE", "MOUSE_LIKE_MASTER")
+BASE_CFG = {"ipTable": [[None, "MASTER", None]], "MASTER_IP": None, "SYNC_IPS": None, "PORT": 24900,
+            "CLICK_SETTLE": 0.008, "RAW_MOUSE": False, "MOUSE_LIKE_MASTER": True}
 
 
 def parse_assigns(text, keys):
@@ -106,9 +105,6 @@ def validate(c):
     s = c.get("SYNC_IPS")
     if not (s is None or isinstance(s, list) and all(isinstance(v, str) for v in s)):
         return 'SYNC_IPS phải là None hoặc ["IP", ...]'
-    s = c.get("PAUSED_IPS")
-    if not (s is None or isinstance(s, list) and all(isinstance(v, str) and v != "MASTER" for v in s)):
-        return 'PAUSED_IPS phải là ["IP", ...]'
     p = c.get("PORT")
     if type(p) is not int or not 1 <= p <= 65535:
         return "Cổng phải là số từ 1 đến 65535"
@@ -178,7 +174,7 @@ def directions(table):
 
 
 def peers_of(cfg):
-    """Danh sách máy (theo thứ tự) + có đồng bộ không, giống cách kvm.py hiểu cấu hình (kể cả máy tạm ngưng)."""
+    """Danh sách máy (theo thứ tự) + có đồng bộ không, giống cách kvm.py hiểu cấu hình."""
     table, sync = cfg["ipTable"], cfg["SYNC_IPS"]
     ips = [v for row in table for v in row if v and v != "MASTER"]
     out = [(ip, sync is None or ip in sync) for ip in ips]
@@ -571,15 +567,13 @@ class Runner:
 
 
 # ------------------------------- hình vẽ: màn hình, thùng rác -------------------------------
-def draw_monitor(cv, cx, cy, s=1.0, master=False, tags=(), off=False):
-    """Biểu tượng màn hình nhiều màu giống Deskflow; master tông xanh dương, máy tạm ngưng màu xám."""
+def draw_monitor(cv, cx, cy, s=1.0, master=False, tags=()):
+    """Biểu tượng màn hình nhiều màu giống Deskflow; master tông xanh dương."""
     w, h = 76 * s, 50 * s
     x0, y0 = cx - w / 2, cy - h / 2
     cv.create_rectangle(x0 - 4 * s, y0 - 4 * s, x0 + w + 4 * s, y0 + h + 4 * s, fill="#141414", outline="#0b0b0b",
                         tags=tags)
     c = ("#5aa0e6", "#3577c4", "#6f63d0", "#3fb4c9") if master else ("#a9c75b", "#4cb6a6", "#6c80c6", "#d8a95c")
-    if off:
-        c = ("#5e5e5e", "#4f4f4f", "#585858", "#666666")
     mid = x0 + w * 0.56
     cv.create_polygon(x0, y0, mid, y0, x0, y0 + h, fill=c[0], outline="", tags=tags)
     cv.create_polygon(mid, y0, x0 + w, y0, x0 + w, y0 + h, fill=c[2], outline="", tags=tags)
@@ -633,9 +627,9 @@ def dialog_buttons(win, ok, cancel, ok_text="OK"):
 
 
 class PcDialog(tk.Toplevel):
-    """Thêm / sửa 1 máy: IP (hoặc tên máy trong mạng LAN), tên hiển thị, có đồng bộ không, có tạm ngưng không."""
+    """Thêm / sửa 1 máy: IP (hoặc tên máy trong mạng LAN), tên hiển thị, có đồng bộ không."""
 
-    def __init__(self, parent, title, ip="", name="", sync=True, taken=(), paused=False):
+    def __init__(self, parent, title, ip="", name="", sync=True, taken=()):
         super().__init__(parent)
         self.result, self.taken = None, set(taken)
         self.title(title)
@@ -645,21 +639,15 @@ class PcDialog(tk.Toplevel):
         body = ttk.Frame(self, padding=(16, 14, 16, 4))
         body.pack(fill="both", expand=True)
         self.ip, self.name, self.sync = tk.StringVar(value=ip), tk.StringVar(value=name), tk.BooleanVar(value=sync)
-        self.paused = tk.BooleanVar(value=paused)
         ttk.Label(body, text="IP của máy (vd 192.168.1.102):").grid(row=0, column=0, sticky="w")
         e = ttk.Entry(body, textvariable=self.ip, width=32)
         e.grid(row=1, column=0, sticky="we", pady=(2, 10))
         ttk.Label(body, text="Tên hiển thị (tùy chọn):").grid(row=2, column=0, sticky="w")
         ttk.Entry(body, textvariable=self.name, width=32).grid(row=3, column=0, sticky="we", pady=(2, 10))
-        self.cb_sync = ttk.Checkbutton(body, text="Làm theo khi ĐỒNG BỘ (Scroll Lock bật)", variable=self.sync)
-        self.cb_sync.grid(row=4, column=0, sticky="w")
-        ttk.Checkbutton(body, text="Tạm ngưng: không kết nối, không điều khiển máy này", variable=self.paused,
-                        command=self._paused_changed).grid(row=5, column=0, sticky="w", pady=(6, 0))
-        ttk.Label(body, text="(vẫn giữ chỗ trong bố cục, bỏ tick là dùng lại)", style="Muted.TLabel").grid(
-            row=6, column=0, sticky="w", padx=(24, 0))
-        self._paused_changed()
+        ttk.Checkbutton(body, text="Làm theo khi ĐỒNG BỘ (Scroll Lock bật)", variable=self.sync).grid(
+            row=4, column=0, sticky="w")
         self.err = ttk.Label(body, text="", style="Err.TLabel")
-        self.err.grid(row=7, column=0, sticky="w", pady=(8, 0))
+        self.err.grid(row=5, column=0, sticky="w", pady=(8, 0))
         dialog_buttons(self, self._ok, self.destroy)
         self.bind("<Return>", lambda ev: self._ok())
         center(self, parent)
@@ -677,12 +665,8 @@ class PcDialog(tk.Toplevel):
         if ip in self.taken:
             self.err.configure(text="IP này đã có trong bố cục")
             return
-        self.result = {"ip": ip, "name": name or ip, "sync": self.sync.get(), "off": self.paused.get()}
+        self.result = {"ip": ip, "name": name or ip, "sync": self.sync.get()}
         self.destroy()
-
-    def _paused_changed(self):
-        """Tạm ngưng thì ô đồng bộ mờ đi (máy tạm ngưng không làm theo; lựa chọn cũ vẫn giữ để bỏ tick là dùng lại)."""
-        self.cb_sync.state(["disabled"] if self.paused.get() else ["!disabled"])
 
 
 class ServerConfig(tk.Toplevel):
@@ -715,7 +699,7 @@ class ServerConfig(tk.Toplevel):
         rows, cols = len(t), max(len(r) for r in t)
         self.rows, self.cols = max(3, rows), max(5, cols)
         r0, c0 = (self.rows - rows) // 2, (self.cols - cols) // 2
-        sync, paused = cfg["SYNC_IPS"], cfg.get("PAUSED_IPS") or ()
+        sync = cfg["SYNC_IPS"]
         self.cells = {}
         for r, row in enumerate(t):
             for c, v in enumerate(row):
@@ -723,7 +707,7 @@ class ServerConfig(tk.Toplevel):
                     self.cells[(r0 + r, c0 + c)] = {"master": True, "ip": "MASTER", "name": "MASTER", "sync": True}
                 elif v:
                     self.cells[(r0 + r, c0 + c)] = {"ip": v, "name": names.get(v, v),
-                                                    "sync": sync is None or v in sync, "off": v in paused}
+                                                    "sync": sync is None or v in sync}
         ips = {d["ip"] for d in self.cells.values()}
         self.extra_sync = [ip for ip in (sync or ()) if ip not in ips]
 
@@ -747,8 +731,8 @@ class ServerConfig(tk.Toplevel):
             port = int(self.port_var.get())
         except ValueError:
             raise ValueError("Cổng phải là số từ 1 đến 65535")
-        cfg = dict(self.cfg, ipTable=table, SYNC_IPS=sync, PAUSED_IPS=[d["ip"] for d in pcs if d.get("off")],
-                   PORT=port, RAW_MOUSE=self.raw_var.get(), MOUSE_LIKE_MASTER=self.like_var.get())
+        cfg = dict(self.cfg, ipTable=table, SYNC_IPS=sync, PORT=port, RAW_MOUSE=self.raw_var.get(),
+                   MOUSE_LIKE_MASTER=self.like_var.get())
         err = validate(cfg)
         if err:
             raise ValueError(err)
@@ -786,10 +770,9 @@ class ServerConfig(tk.Toplevel):
         self.cv = tk.Canvas(tab, width=self.cols * self.cw + 1, height=self.rows * self.ch + 1, bg=CELL,
                             highlightthickness=0)
         self.cv.pack(pady=(8, 4))
-        ttk.Label(tab, text="Bấm đúp: thêm / sửa máy   ·   Chuột phải: bật/tắt đồng bộ, tạm ngưng, xóa\n"
-                            "Máy \"không đồng bộ\": không làm theo khi bật Scroll Lock   ·   "
-                            "Máy \"tạm ngưng\": không kết nối, không điều khiển (giữ chỗ trong bố cục)",
-                  style="Muted.TLabel", justify="center").pack()
+        ttk.Label(tab, text="Bấm đúp: thêm / sửa máy   ·   Chuột phải: bật/tắt đồng bộ, xóa   ·   "
+                            "Máy ghi \"không đồng bộ\" sẽ không làm theo khi bật Scroll Lock",
+                  style="Muted.TLabel").pack()
         self.cv.bind("<ButtonPress-1>", self._press)
         self.cv.bind("<B1-Motion>", self._motion)
         self.cv.bind("<ButtonRelease-1>", self._release)
@@ -823,18 +806,15 @@ class ServerConfig(tk.Toplevel):
         if d.get("master"):
             cv.create_rectangle(c * self.cw + 3, r * self.ch + 3, (c + 1) * self.cw - 3, (r + 1) * self.ch - 3,
                                 outline=ACCENT, width=2, tags=tag)
-        off = d.get("off", False)
-        draw_monitor(cv, cx, cy, s, d.get("master", False), tag, off=off)
+        draw_monitor(cv, cx, cy, s, d.get("master", False), tag)
         if d.get("master"):
             lines = [("MASTER", FG, self.app.f_bold), ("(máy này)", MUTED, self.app.f_small)]
         else:
             name = d["name"] if len(d["name"]) <= 18 else d["name"][:17] + "…"
-            lines = [(name, MUTED if off else FG, self.app.f_bold)]
+            lines = [(name, FG, self.app.f_bold)]
             if d["name"] != d["ip"]:
                 lines.append((d["ip"], MUTED, self.app.f_small))
-            if off:
-                lines.append(("tạm ngưng", ERR_C, self.app.f_small))
-            elif not d["sync"]:
+            if not d["sync"]:
                 lines.append(("không đồng bộ", WARN_C, self.app.f_small))
         for (text, color, font), dy in zip(lines, (49, 65, 80)):
             cv.create_text(cx, cy + dy * s, text=text, fill=color, font=font, tags=tag)
@@ -937,8 +917,7 @@ class ServerConfig(tk.Toplevel):
             messagebox.showinfo("MASTER", "Đây là máy chủ (máy đang chạy app này). Kéo để đổi vị trí so với các "
                                           "máy khác.", parent=self)
             return
-        dlg = PcDialog(self, "Sửa máy", d["ip"], d["name"], d["sync"], taken=self._taken(cell),
-                       paused=d.get("off", False))
+        dlg = PcDialog(self, "Sửa máy", d["ip"], d["name"], d["sync"], taken=self._taken(cell))
         if dlg.result:
             self.cells[cell] = dlg.result
         self._redraw()
@@ -954,10 +933,6 @@ class ServerConfig(tk.Toplevel):
         self.cells[cell]["sync"] = not self.cells[cell]["sync"]
         self._redraw()
 
-    def _toggle_paused(self, cell):
-        self.cells[cell]["off"] = not self.cells[cell].get("off", False)
-        self._redraw()
-
     def _menu(self, e):
         cell = self._cell_at(e.x, e.y)
         if cell is None:
@@ -971,9 +946,7 @@ class ServerConfig(tk.Toplevel):
         else:
             m.add_command(label="Sửa…", command=lambda: self._edit(cell))
             m.add_command(label=("✓ " if d["sync"] else "    ") + "Làm theo khi đồng bộ",
-                          command=lambda: self._toggle_sync(cell), state="disabled" if d.get("off") else "normal")
-            m.add_command(label=("✓ " if d.get("off") else "    ") + "Tạm ngưng (không kết nối, không điều khiển)",
-                          command=lambda: self._toggle_paused(cell))
+                          command=lambda: self._toggle_sync(cell))
             m.add_separator()
             m.add_command(label="Xóa", command=lambda: (self._delete(cell), self._redraw()))
         m.tk_popup(e.x_root, e.y_root)
@@ -1525,9 +1498,7 @@ class App:
         c = self.cfg
         n = len(peers_of(c))
         sync = c["SYNC_IPS"]
-        n_off = len(set(c.get("PAUSED_IPS") or ()) & {ip for ip, _ in peers_of(c)})
         txt = f"Bố cục: {n} máy khác" + ("" if n else " (chưa có - bấm Cấu hình máy chủ)") + \
-              (f" ({n_off} tạm ngưng)" if n_off else "") + \
               ("   ·   đồng bộ: tất cả" if sync is None else f"   ·   đồng bộ: {len(sync)} máy") + \
               f"   ·   cổng {c['PORT']}"
         if self.cfg_err:
@@ -1636,13 +1607,10 @@ class App:
         tv = self.tree
         m = self.kvm.get("master") if self.runner.running else None
         dirs = directions(self.cfg["ipTable"])
-        paused = set(self.cfg.get("PAUSED_IPS") or ())
         if m:
             rows = [(p.get("ip"), p.get("sync"), p.get("st"), p.get("rtt")) for p in m.get("peers") or ()]
         else:
-            rows = [(ip, sync, None, None) for ip, sync in peers_of(self.cfg) if ip not in paused]
-        shown = {r[0] for r in rows}   # máy tạm ngưng: kvm không kết nối nên không báo -> vẫn hiện trong bảng
-        rows += [(ip, None, "paused", None) for ip, _ in peers_of(self.cfg) if ip in paused and ip not in shown]
+            rows = [(ip, sync, None, None) for ip, sync in peers_of(self.cfg)]
         act = m.get("active") if m else None
         keep = {r[0] for r in rows}
         for iid in tv.get_children():
@@ -1651,8 +1619,7 @@ class App:
         for i, (ip, sync, st, rtt) in enumerate(rows):
             text, tag = {None: ("—", "off"), "off": ("Chưa kết nối", "off"), "ok": ("Đã kết nối", "ok"),
                          "old": ("kvm.py KHÁC bản: chép cùng file sang", "warn"),
-                         "wait": ("Đang kết nối…", "warn"),
-                         "paused": ("Tạm ngưng (không kết nối)", "off")}.get(st, (str(st), "warn"))
+                         "wait": ("Đang kết nối…", "warn")}.get(st, (str(st), "warn"))
             tags = (tag,)
             if st == "ok" and rtt is not None and rtt >= 30:
                 text, tags = "Đã kết nối (chậm)", ("warn",)
@@ -1660,7 +1627,7 @@ class App:
             if ip == act:
                 text, tags, name = "▶ Đang điều khiển", ("ok", "active"), "▶ " + name
             vals = (name, ip, dirs.get(ip, "chỉ đồng bộ"), text, "" if rtt is None else f"{rtt} ms",
-                    "—" if st == "paused" else "Có" if sync else "Không")
+                    "Có" if sync else "Không")
             if tv.exists(ip):
                 tv.item(ip, values=vals, tags=tags)
                 tv.move(ip, "", i)

@@ -36,8 +36,6 @@ ipTable = [
 ]
 SYNC_IPS = None       # máy làm theo khi ĐỒNG BỘ. None = mọi máy trong ipTable. Hoặc liệt kê, vd
                       # ["192.168.1.102", "192.168.1.50"] (IP không có trong ipTable vẫn được: máy đó chỉ đồng bộ)
-PAUSED_IPS = []       # máy TẠM NGƯNG: vẫn giữ chỗ trong ipTable nhưng master không kết nối, không điều khiển, không
-                      # đồng bộ (ô đó coi như trống), vd ["192.168.1.106"]. Bỏ khỏi danh sách là dùng lại
 PORT = 24900          # cổng TCP: client lắng nghe, master kết nối tới (mở firewall trên client)
 MASTER_IP = None      # vd "192.168.1.10": client chỉ nhận kết nối từ máy này (None = nhận mọi máy)
 MAX_CLIP_MB = 50      # giới hạn dung lượng clipboard mỗi lần chuyển (ảnh chụp màn hình...)
@@ -694,7 +692,7 @@ FMT = {T_MOVE: struct.Struct("<ii"), T_BTN: struct.Struct("<BB"), T_WHEEL: struc
        T_RMOVE: struct.Struct("<ii"),     # CHUYỂN MÁY: chuyển động gốc của chuột (raw), client tự tính tốc độ
        T_MFEEL: struct.Struct("<Biii")}   # CHUYỂN MÁY: cài đặt chuột của master (tốc độ, ngưỡng 1, ngưỡng 2, gia tốc)
 VERSION = 5           # master + client phải CÙNG bản (khác bản: master không điều khiển máy đó, chỉ báo trong nhật ký)
-BUILD = "17/10a"      # ngày sửa file (hiện ở dòng đầu nhật ký): xem máy đang chạy đúng file mới chưa
+BUILD = "13/10h"      # ngày sửa file (hiện ở dòng đầu nhật ký): xem máy đang chạy đúng file mới chưa
 CHUNK = 64 * 1024     # clipboard lớn được cắt nhỏ, chen giữa các sự kiện chuột
 TIMEOUT = 5.0         # không nhận được gì trong 5s -> coi như mất kết nối
 PING_EVERY = 1.0      # master ping mỗi 1s (kể cả khi đang di chuột), client trả lời PONG
@@ -896,10 +894,8 @@ class Peer:
 
 
 class Master:
-    def __init__(self, table=None, sync_ips=SYNC_IPS, paused=()):
-        self.paused = tuple(ip for ip in paused or () if ip and ip != "MASTER")
-        self.table = [[None if v in self.paused else v for v in row]   # máy tạm ngưng = ô trống: không kết nối,
-                      for row in (table if table is not None else ipTable)]   # không chuyển sang, không đồng bộ
+    def __init__(self, table=None, sync_ips=SYNC_IPS):
+        self.table = table if table is not None else ipTable
         cells = [(r, c, v) for r, row in enumerate(self.table) for c, v in enumerate(row) if v]
         homes = [(r, c) for r, c, v in cells if v == "MASTER"]
         if len(homes) != 1:
@@ -911,7 +907,7 @@ class Master:
                 label = DIR_NAME[STEP.index(step)] if step in STEP else f"ô[{r}][{c}]"
                 self.peers[v] = Peer(v, (r, c), label, sync_ips is None or v in sync_ips)
         for ip in sync_ips or ():
-            if ip and ip != "MASTER" and ip not in self.peers and ip not in self.paused:
+            if ip and ip != "MASTER" and ip not in self.peers:
                 self.peers[ip] = Peer(ip, None, "chỉ đồng bộ", True)
         self.peer_list = tuple(self.peers.values())
         self.sync_peers = tuple(p for p in self.peer_list if p.sync)
@@ -1651,8 +1647,6 @@ class Master:
         log(f"=== MiniKVM MASTER (bản {VERSION}, file {BUILD}) ===")
         for p in self.peer_list:
             log(f"    {p.label:>11}: {p.ip}" + ("" if p.sync else "   (không đồng bộ)"))
-        if self.paused:
-            log(f"    {'tạm ngưng':>11}: {', '.join(self.paused)}   (không kết nối, không điều khiển)")
         self._log_mode()
         EXIT_HOOKS.append(self._exit_focus)   # (giao diện bấm Dừng/Thoát lúc đang ở máy khác)
         threading.Thread(target=self._focus_loop, name="focus", daemon=True).start()
@@ -2001,8 +1995,7 @@ def local_ips(probe):
     return ips
 
 
-CONFIG_KEYS = ("ipTable", "MASTER_IP", "SYNC_IPS", "PAUSED_IPS", "PORT", "CLICK_SETTLE", "RAW_MOUSE",
-               "MOUSE_LIKE_MASTER")
+CONFIG_KEYS = ("ipTable", "MASTER_IP", "SYNC_IPS", "PORT", "CLICK_SETTLE", "RAW_MOUSE", "MOUSE_LIKE_MASTER")
 # Cấu hình do app MiniKVM (kvm_gui.pyw) lưu, nằm cùng chỗ với dữ liệu của app
 CONFIG_FILE = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "MiniKVM", "config.json")
 
@@ -2019,9 +2012,6 @@ def _check_config(vals):
     s = vals.get("SYNC_IPS")
     if not (s is None or isinstance(s, list) and all(isinstance(v, str) for v in s)):
         raise ValueError('SYNC_IPS phải là None hoặc ["IP", ...]')
-    s = vals.get("PAUSED_IPS")
-    if not (s is None or isinstance(s, list) and all(isinstance(v, str) and v != "MASTER" for v in s)):
-        raise ValueError('PAUSED_IPS phải là ["IP", ...]')
     p = vals.get("PORT", PORT)
     if type(p) is not int or not 1 <= p <= 65535:
         raise ValueError("PORT phải là số từ 1 đến 65535")
@@ -2105,7 +2095,7 @@ def main():
     gc.collect()
     gc.freeze()   # dồn hết đối tượng lúc khởi động sang vùng "đóng băng": Python dọn rác nhanh hơn, ít khựng
     if role == "master":
-        Master(sync_ips=SYNC_IPS, paused=PAUSED_IPS).run()   # truyền rõ: có thể vừa được đọc từ file cấu hình
+        Master(sync_ips=SYNC_IPS).run()   # truyền rõ: SYNC_IPS có thể vừa được đọc từ file cấu hình
     else:
         Client().run()
 
