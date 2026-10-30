@@ -10,6 +10,7 @@ from mumu_tool.tool_game.kiemhieptinh1.to_doi_bst_tay import to_doi_bst_tay, loo
 from mumu_tool.tool_game.kiemhieptinh1.giao_dich_van import giao_dich_van_Hoang, giao_dich_van_Huy
 from mumu_tool.tool_game.kiemhieptinh1.tool_vut_exp import tool_vut_exp
 from mumu_tool.tool_game.kiemhieptinh1.da_tau import lam_da_tau, vut_do_da_tau
+from mumu_tool.tool_game.kiemhieptinh1.rao_ban import rao_ban
 from mumu_tool.tool_game.utils import auto_click, auto_luom, test_click
 from pathlib import Path
 import subprocess
@@ -94,4 +95,5 @@ main_menu = {
     "3": ("auto click", auto_click),
     "4": ("auto luom", auto_luom),
     "5": ("test click", test_click),
+    "6": ("rao ban", rao_ban),
 }
