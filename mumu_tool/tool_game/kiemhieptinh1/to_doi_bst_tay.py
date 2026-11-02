@@ -29,7 +29,8 @@ def loop_to_doi_bst():
 
     def addTeam():
         nonlocal count
-        pointsTeam = [(190, 185), (190, 185), (500, 440), (694, 116), (900, 225)]
+        pointsTeam = [(190, 185), (190, 185), (500, 440), (694, 116), (696, 464), (694, 116), (694, 116), (694, 116), (694, 116), (694, 116), (694, 116)]
+        # pointsTeam = [(190, 185), (190, 185), (500, 440), (694, 116), (900, 225)]
 
         with paused_lock:
             current_paused = set(paused_ports)
@@ -43,7 +44,8 @@ def loop_to_doi_bst():
         if not active_devices:
             return
 
-        tap_points(pointsTeam, 0.3, active_devices)
+        tap_points(pointsTeam, 0.5, active_devices)
+        # tap_points(pointsTeam, 0.3, active_devices)
 
     # ---- Vòng lặp chạy liên tục addTeam ----
     def addTeam_loop():
