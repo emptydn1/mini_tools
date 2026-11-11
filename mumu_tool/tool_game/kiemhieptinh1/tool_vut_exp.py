@@ -40,7 +40,7 @@ def tool_vut_exp():
         def _move_to_coordinate(port, x, y):
             tap(port, 855, 60)  # click bản đồ
             time.sleep(1)
-            tap(port, 335, 455)  # click điểm đến
+            tap(port, 341, 470)  # click điểm đến
             time.sleep(1)
             tap(port, 380, 260)  # nhập x
             time.sleep(1)
